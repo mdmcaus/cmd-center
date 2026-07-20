@@ -6,7 +6,7 @@ LOG_FILE  = server.log
 
 .PHONY: all install start stop restart status logs open run \
         test test-unit test-security test-ui test-all test-ci \
-        clean help
+        lint audit clean help
 
 all: help
 
@@ -90,6 +90,16 @@ test-all: test test-ui
 ## Alias for test-all
 test-ci: test-all
 
+# ── Static analysis ───────────────────────────────────────────────────────────
+
+## Lint with ESLint + security plugins (0 errors expected; fs warnings are informational)
+lint:
+	npx eslint .
+
+## Check runtime dependencies for known vulnerabilities
+audit:
+	npm audit --omit=dev
+
 # ── Housekeeping ──────────────────────────────────────────────────────────────
 
 ## Remove logs, pid file, and test artifacts
@@ -99,5 +109,5 @@ clean:
 
 ## Show this help
 help:
-	@echo "cmd-center — make targets:"
+	@echo "cmd-center make targets:"
 	@grep -E '^##' -A1 Makefile | grep -E '^[a-zA-Z0-9_-]+:' | sed 's/:.*//' | sort -u | sed 's/^/  make /'

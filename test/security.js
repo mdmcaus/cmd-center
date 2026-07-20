@@ -6,7 +6,6 @@
 //   - the server binds to 127.0.0.1 (loopback only)
 // Run: node test/security.js
 
-const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');

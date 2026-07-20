@@ -48,9 +48,9 @@ Then open http://127.0.0.1:3200, pick a project on the left, and use the termina
 
 Set via environment variables (or `make VAR=value ...`):
 
-- `PORT` (default `3200`) — port to listen on.
-- `HOST` (default `127.0.0.1`) — bind address. Keep this on loopback.
-- `REPO_ROOT` (default `/Users/michael/repo/claude`) — directory scanned for projects.
+- `PORT` (default `3200`): port to listen on.
+- `HOST` (default `127.0.0.1`): bind address. Keep this on loopback.
+- `REPO_ROOT` (default `/Users/michael/repo/claude`): directory scanned for projects.
 
 ## How it works
 
@@ -83,6 +83,8 @@ local shell: only run it on a machine you control.
 make test        # unit + security tests (no browser needed)
 make test-ui     # Playwright UI tests (launches its own fixture server)
 make test-all    # everything
+make lint        # ESLint + security plugins (0 errors expected)
+make audit       # npm dependency vulnerability check
 ```
 
 - `test/unit.js` covers project discovery and Makefile target parsing against a

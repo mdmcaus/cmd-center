@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 - Initial project scaffold.
+- ESLint with `eslint-plugin-security` and `eslint-plugin-no-unsanitized`
+  (`eslint.config.js`), plus `make lint` and `make audit` targets.
+- `EXTERNAL_TEST.md` rewritten as a step-by-step runbook: each tool has install,
+  an exact verified command, and what a passing result looks like. Covers the
+  bundled checks, curl-based WebSocket authorization probes, Semgrep, OWASP ZAP,
+  and Nikto, with a verified baseline table.
 - Project discovery: scans `/Users/michael/repo/claude` for directories containing
   a `Makefile` and lists them in a sidebar.
 - Makefile target parsing with optional `## description` comments, surfaced as
