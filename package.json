@@ -1,0 +1,32 @@
+{
+  "name": "cmd-center",
+  "version": "0.1.0",
+  "description": "Local web command center: browse projects with a Makefile and run make in a real terminal.",
+  "main": "server.js",
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js",
+    "start": "node server.js",
+    "test": "node test/unit.js && node test/security.js",
+    "test:ui": "playwright test"
+  },
+  "keywords": [
+    "makefile",
+    "terminal",
+    "command-center",
+    "local"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "express": "^5.2.1",
+    "helmet": "^8.2.0",
+    "node-pty": "^1.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
+  }
+}

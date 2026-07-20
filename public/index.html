@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cmd-center</title>
+    <link rel="stylesheet" href="vendor/xterm.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <header id="sidebar-head">
+          <h1>cmd-center</h1>
+          <button id="refresh" title="Rescan projects" aria-label="Rescan projects">Rescan</button>
+        </header>
+        <label id="toggle-row">
+          <input type="checkbox" id="show-targets" checked />
+          <span>Show quick-run target buttons</span>
+        </label>
+        <ul id="project-list" aria-label="Projects"></ul>
+        <footer id="sidebar-foot">
+          <span id="project-count"></span>
+        </footer>
+      </aside>
+      <main id="main">
+        <header id="main-head">
+          <span id="current-project">Select a project</span>
+          <span id="current-path"></span>
+        </header>
+        <div id="targets" hidden></div>
+        <div id="terminal"></div>
+        <div id="empty-state">
+          <p>Pick a project on the left to open a terminal in its directory.</p>
+          <p class="hint">You can then run <code>make</code> with any target, or any other command.</p>
+        </div>
+      </main>
+    </div>
+
+    <script src="vendor/xterm.js"></script>
+    <script src="vendor/addon-fit.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
