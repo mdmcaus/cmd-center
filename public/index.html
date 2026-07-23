@@ -28,8 +28,13 @@
           <span id="current-project">Select a project</span>
           <span id="current-path"></span>
         </header>
-        <div id="targets" hidden></div>
-        <div id="terminal"></div>
+        <div id="workspace">
+          <div id="terminal"></div>
+          <aside id="targets-panel" hidden>
+            <div class="targets-head">Make targets</div>
+            <div id="targets"></div>
+          </aside>
+        </div>
         <div id="empty-state">
           <p>Pick a project on the left to open a terminal in its directory.</p>
           <p class="hint">You can then run <code>make</code> with any target, or any other command.</p>

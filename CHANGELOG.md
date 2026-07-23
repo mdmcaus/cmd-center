@@ -34,6 +34,11 @@ All notable changes to this project are documented here. The format is based on
   `agent-status`, backed by a plist template in `launchd/` that is rendered with
   absolute paths (launchd runs with a minimal PATH).
 
+### Changed
+- Quick-run make target buttons moved from a top bar to a scrollable vertical panel
+  on the right side of the terminal, so long target lists are easy to navigate. The
+  terminal reflows when the panel is toggled on or off.
+
 ### Fixed
 - `make start` now launches detached via `nohup`, refuses to start when the port is
   already in use (previously it wrote a dead PID after `EADDRINUSE`), and verifies the

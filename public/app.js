@@ -9,6 +9,7 @@
   const refreshBtn = document.getElementById('refresh');
   const showTargetsEl = document.getElementById('show-targets');
   const targetsEl = document.getElementById('targets');
+  const targetsPanelEl = document.getElementById('targets-panel');
   const currentProjectEl = document.getElementById('current-project');
   const currentPathEl = document.getElementById('current-path');
   const terminalEl = document.getElementById('terminal');
@@ -29,6 +30,8 @@
   showTargetsEl.addEventListener('change', function () {
     localStorage.setItem(SHOW_TARGETS_KEY, String(showTargetsEl.checked));
     renderTargets();
+    // The terminal width changes when the panel shows/hides, so reflow xterm.
+    sendResize();
   });
 
   // --- project list ---
@@ -74,10 +77,10 @@
   function renderTargets() {
     targetsEl.innerHTML = '';
     if (!active || !showTargetsEl.checked) {
-      targetsEl.hidden = true;
+      targetsPanelEl.hidden = true;
       return;
     }
-    targetsEl.hidden = false;
+    targetsPanelEl.hidden = false;
     const targets = active.targets || [];
     if (!targets.length) {
       const none = document.createElement('span');
@@ -88,7 +91,7 @@
     }
     for (const t of targets) {
       const btn = document.createElement('button');
-      btn.title = t.desc ? t.name + ' — ' + t.desc : 'make ' + t.name;
+      btn.title = t.desc ? 'make ' + t.name + ': ' + t.desc : 'make ' + t.name;
       const label = document.createElement('span');
       label.textContent = 'make ' + t.name;
       btn.appendChild(label);
