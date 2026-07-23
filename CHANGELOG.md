@@ -38,6 +38,8 @@ All notable changes to this project are documented here. The format is based on
 - Quick-run make target buttons moved from a top bar to a scrollable vertical panel
   on the right side of the terminal, so long target lists are easy to navigate. The
   terminal reflows when the panel is toggled on or off.
+- Target buttons in the panel are now sorted alphabetically (case-insensitive),
+  matching the project list, instead of following Makefile order.
 
 ### Fixed
 - `make start` now launches detached via `nohup`, refuses to start when the port is

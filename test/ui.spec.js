@@ -35,6 +35,14 @@ test('quick-run target buttons appear and reflect the Makefile', async ({ page }
   await expect(page.locator('#targets')).toContainText('compile the widget');
 });
 
+test('target buttons are sorted alphabetically', async ({ page }) => {
+  // The widget fixture lists targets as test, build (non-alphabetical) in the
+  // Makefile; the panel must render them build, then test.
+  await page.locator('#project-list li', { hasText: 'widget' }).click();
+  const labels = await page.locator('#targets button > span:first-child').allTextContents();
+  expect(labels).toEqual(['make build', 'make test']);
+});
+
 test('toggle hides and shows the target buttons', async ({ page }) => {
   await page.locator('#project-list li', { hasText: 'widget' }).click();
   await expect(page.locator('#targets')).toBeVisible();

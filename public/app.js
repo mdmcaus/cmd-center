@@ -81,7 +81,12 @@
       return;
     }
     targetsPanelEl.hidden = false;
-    const targets = active.targets || [];
+    // Sort targets alphabetically (case-insensitive), matching the project list.
+    const targets = (active.targets || [])
+      .slice()
+      .sort(function (a, b) {
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      });
     if (!targets.length) {
       const none = document.createElement('span');
       none.className = 'none';
