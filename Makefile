@@ -4,9 +4,16 @@ BASE_URL  = http://$(HOST):$(PORT)
 PID_FILE  = .server.pid
 LOG_FILE  = server.log
 
+# LaunchAgent (macOS autostart) settings.
+AGENT_LABEL = com.mdmcaus.cmd-center
+AGENT_PLIST = $(HOME)/Library/LaunchAgents/$(AGENT_LABEL).plist
+NODE_BIN   := $(shell command -v node)
+WORKDIR    := $(shell pwd)
+
 .PHONY: all install start stop restart status logs open run \
         test test-unit test-security test-ui test-all test-ci \
-        lint audit clean help
+        lint audit install-agent uninstall-agent agent-status \
+        clean help
 
 all: help
 
@@ -22,35 +29,55 @@ run:
 
 # ── Server ────────────────────────────────────────────────────────────────────
 
-## Start the server in the background
+## Start the server in the background (detached, survives closing the terminal)
 start:
 	@if [ -f $(PID_FILE) ] && kill -0 $$(cat $(PID_FILE)) 2>/dev/null; then \
-	  echo "Server already running (PID $$(cat $(PID_FILE)))"; \
+	  echo "Server already running (PID $$(cat $(PID_FILE)))"; exit 0; \
+	fi; \
+	OTHER=$$(lsof -tiTCP:$(PORT) -sTCP:LISTEN 2>/dev/null); \
+	if [ -n "$$OTHER" ]; then \
+	  echo "Port $(PORT) is already in use by PID $$OTHER (not started by make)."; \
+	  echo "Run 'make stop' to clear it, or start with a different PORT=<n>."; \
+	  exit 1; \
+	fi; \
+	rm -f $(PID_FILE); \
+	PORT=$(PORT) HOST=$(HOST) nohup node server.js >> $(LOG_FILE) 2>&1 & \
+	NEWPID=$$!; \
+	sleep 1; \
+	if kill -0 $$NEWPID 2>/dev/null && lsof -tiTCP:$(PORT) -sTCP:LISTEN >/dev/null 2>&1; then \
+	  echo $$NEWPID > $(PID_FILE); \
+	  echo "Server started (PID $$NEWPID) -> $(BASE_URL)"; \
 	else \
-	  PORT=$(PORT) HOST=$(HOST) node server.js >> $(LOG_FILE) 2>&1 & \
-	  echo $$! > $(PID_FILE); \
-	  sleep 1; \
-	  echo "Server started (PID $$(cat $(PID_FILE))) -> $(BASE_URL)"; \
+	  echo "Server failed to start. Recent log:"; \
+	  tail -15 $(LOG_FILE) 2>/dev/null; \
+	  exit 1; \
 	fi
 
-## Stop the background server
+## Stop the background server (also clears any stray process holding the port)
 stop:
-	@if [ -f $(PID_FILE) ] && kill -0 $$(cat $(PID_FILE)) 2>/dev/null; then \
-	  kill $$(cat $(PID_FILE)); \
-	  rm -f $(PID_FILE); \
-	  echo "Server stopped"; \
-	else \
-	  echo "Server not running"; \
-	  rm -f $(PID_FILE); \
-	fi
+	@STOPPED=0; \
+	if [ -f $(PID_FILE) ] && kill -0 $$(cat $(PID_FILE)) 2>/dev/null; then \
+	  kill $$(cat $(PID_FILE)) 2>/dev/null && STOPPED=1; \
+	fi; \
+	rm -f $(PID_FILE); \
+	ORPHAN=$$(lsof -tiTCP:$(PORT) -sTCP:LISTEN 2>/dev/null); \
+	if [ -n "$$ORPHAN" ]; then \
+	  echo "Clearing process still on port $(PORT): $$ORPHAN"; \
+	  kill $$ORPHAN 2>/dev/null; STOPPED=1; \
+	fi; \
+	if [ $$STOPPED -eq 1 ]; then echo "Server stopped"; else echo "Server not running"; fi
 
 ## Restart the server
 restart: stop start
 
-## Show server status and last 10 log lines
+## Show server status (checks the port, not just the PID file) and last 10 log lines
 status:
-	@if [ -f $(PID_FILE) ] && kill -0 $$(cat $(PID_FILE)) 2>/dev/null; then \
-	  echo "Running  PID $$(cat $(PID_FILE))  ->  $(BASE_URL)"; \
+	@LPID=$$(lsof -tiTCP:$(PORT) -sTCP:LISTEN 2>/dev/null); \
+	if [ -n "$$LPID" ]; then \
+	  echo "Running  PID $$LPID  ->  $(BASE_URL)"; \
+	  if [ -f $(PID_FILE) ] && [ "$$(cat $(PID_FILE))" != "$$LPID" ]; then \
+	    echo "(note: $(PID_FILE) is stale; port is held by PID $$LPID)"; \
+	  fi; \
 	else \
 	  echo "Stopped"; \
 	fi
@@ -66,6 +93,42 @@ logs:
 ## Open the app in the default browser
 open:
 	open $(BASE_URL)
+
+# ── Autostart (macOS LaunchAgent) ─────────────────────────────────────────────
+
+## Install a LaunchAgent so cmd-center starts at login and restarts on crash
+install-agent:
+	@if [ -z "$(NODE_BIN)" ]; then echo "node not found on PATH"; exit 1; fi
+	@mkdir -p $(HOME)/Library/LaunchAgents
+	@sed -e "s#__NODE__#$(NODE_BIN)#g" \
+	     -e "s#__WORKDIR__#$(WORKDIR)#g" \
+	     -e "s#__PORT__#$(PORT)#g" \
+	     -e "s#__HOST__#$(HOST)#g" \
+	     -e "s#__LABEL__#$(AGENT_LABEL)#g" \
+	     launchd/$(AGENT_LABEL).plist.template > $(AGENT_PLIST)
+	@launchctl unload $(AGENT_PLIST) 2>/dev/null || true
+	@launchctl load $(AGENT_PLIST)
+	@echo "LaunchAgent installed and loaded: $(AGENT_PLIST)"
+	@echo "Starts at login and restarts on crash. Do not also run 'make start'."
+	@echo "Check with 'make agent-status'; remove with 'make uninstall-agent'."
+
+## Stop and remove the LaunchAgent
+uninstall-agent:
+	@if [ -f $(AGENT_PLIST) ]; then \
+	  launchctl unload $(AGENT_PLIST) 2>/dev/null || true; \
+	  rm -f $(AGENT_PLIST); \
+	  echo "LaunchAgent removed"; \
+	else \
+	  echo "No LaunchAgent installed"; \
+	fi
+
+## Show whether the LaunchAgent is loaded
+agent-status:
+	@if launchctl list 2>/dev/null | grep -q $(AGENT_LABEL); then \
+	  echo "LaunchAgent loaded:"; launchctl list | grep $(AGENT_LABEL); \
+	else \
+	  echo "LaunchAgent not loaded"; \
+	fi
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 

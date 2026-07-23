@@ -44,6 +44,28 @@ make run          # or run in the foreground (Ctrl-C to stop)
 
 Then open http://127.0.0.1:3200, pick a project on the left, and use the terminal.
 
+`make start` launches the server detached (via `nohup`), so it keeps running after you
+close the terminal. You do not need to wrap it in `nohup` yourself. It refuses to start
+if the port is already held, and `make status` checks the port (not just the PID file),
+so a stale PID file cannot make it report the wrong state. `make stop` also clears any
+stray process still holding the port.
+
+### Autostart at login (recommended for always-on use)
+
+To have cmd-center start at login and restart automatically if it crashes, install a
+macOS LaunchAgent:
+
+```bash
+make install-agent     # start at login, keep alive, load it now
+make agent-status      # show whether the agent is loaded
+make uninstall-agent   # stop and remove it
+```
+
+Use the LaunchAgent or `make start`, not both at once, since they would compete for the
+port. The agent runs `node server.js` with an absolute node path (launchd uses a minimal
+PATH) and writes to `server.log`. The rendered plist lives at
+`~/Library/LaunchAgents/com.mdmcaus.cmd-center.plist`; the template is in `launchd/`.
+
 ### Configuration
 
 Set via environment variables (or `make VAR=value ...`):

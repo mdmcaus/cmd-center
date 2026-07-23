@@ -29,7 +29,18 @@ All notable changes to this project are documented here. The format is based on
 - Unit tests (discovery + parser), black-box security tests, and Playwright UI
   tests. Makefile with `install`/`start`/`stop`/`status`/`test`/`test-all`/`clean`.
 
+### Added (background service)
+- macOS LaunchAgent for autostart: `make install-agent` / `uninstall-agent` /
+  `agent-status`, backed by a plist template in `launchd/` that is rendered with
+  absolute paths (launchd runs with a minimal PATH).
+
 ### Fixed
+- `make start` now launches detached via `nohup`, refuses to start when the port is
+  already in use (previously it wrote a dead PID after `EADDRINUSE`), and verifies the
+  server actually came up before recording the PID.
+- `make status` checks the listening port rather than only the PID file, so a stale PID
+  file no longer reports the wrong state.
+- `make stop` clears any stray process still holding the port, preventing orphans.
 - Terminal now reflects the real login user. `USER`/`LOGNAME`/`HOME`/`SHELL` are
   rebuilt from `os.userInfo()` before spawning the PTY, so a stale `USER=root`
   leaked into the server environment no longer makes the prompt show `root@`.

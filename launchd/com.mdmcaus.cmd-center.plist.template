@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent template for cmd-center. Placeholders are filled in by
+  'make install-agent', which renders this to
+  ~/Library/LaunchAgents/com.mdmcaus.cmd-center.plist with absolute paths
+  (launchd runs with a minimal PATH, so node must be an absolute path).
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>__LABEL__</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__NODE__</string>
+    <string>__WORKDIR__/server.js</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__WORKDIR__</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PORT</key>
+    <string>__PORT__</string>
+    <key>HOST</key>
+    <string>__HOST__</string>
+  </dict>
+
+  <!-- Start when the agent is loaded (login) and keep it running. -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__WORKDIR__/server.log</string>
+  <key>StandardErrorPath</key>
+  <string>__WORKDIR__/server.log</string>
+</dict>
+</plist>
