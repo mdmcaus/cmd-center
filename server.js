@@ -24,6 +24,15 @@ const app = express();
 
 // Content-Security-Policy: everything is served from self and xterm needs an
 // inline style for its DOM measuring; no external origins are permitted.
+//
+// Two directives differ from helmet's defaults, both required for a plain-http
+// local tool:
+//   - upgrade-insecure-requests is removed. Helmet enables it by default, but on
+//     http://127.0.0.1 Safari honours it and tries to fetch styles.css / app.js /
+//     the xterm assets over https, which fails (there is no TLS), leaving the page
+//     unstyled with no scripts. Chrome exempts localhost; Safari does not.
+//   - connect-src lists the ws:// origins explicitly so Safari allows the terminal
+//     WebSocket ('self' alone is not reliably honoured for ws in Safari).
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -32,8 +41,16 @@ app.use(
         'default-src': ["'self'"],
         'script-src': ["'self'"],
         'style-src': ["'self'", "'unsafe-inline'"],
-        'connect-src': ["'self'"],
+        'connect-src': [
+          ...new Set([
+            "'self'",
+            `ws://${HOST}:${PORT}`,
+            `ws://localhost:${PORT}`,
+            `ws://127.0.0.1:${PORT}`,
+          ]),
+        ],
         'img-src': ["'self'", 'data:'],
+        'upgrade-insecure-requests': null,
       },
     },
   })

@@ -35,7 +35,7 @@ These need no extra installs and are the fastest signal. Run them first.
 make lint        # ESLint + security plugins   -> expect 0 errors
 make audit       # npm dependency audit         -> expect 0 vulnerabilities
 make test        # unit + black-box security    -> expect all pass
-make test-ui     # Playwright UI                 -> expect 6 passed
+make test-ui     # Playwright UI                 -> expect 14 passed (7 x 2 browsers)
 ```
 
 Everything after this point is optional depth: DAST scanners, deeper SAST, and manual
@@ -47,12 +47,13 @@ protocol level probes.
 
 ### 1a. Playwright (bundled)
 
-- Install: already a dev dependency. First run only: `npx playwright install chromium`.
+- Install: already a dev dependency. First run only: `npx playwright install chromium webkit`
+  (the suite runs under both Chromium and WebKit/Safari).
 - Run:
   ```bash
   make test-ui
   ```
-- Pass looks like: `6 passed`. The suite loads the page, lists projects, opens a
+- Pass looks like: `14 passed` (7 tests across Chromium and WebKit). The suite loads the page, lists projects, opens a
   terminal, runs a target, and toggles the target buttons. On failure a screenshot is
   written under `test-results/`.
 
@@ -221,7 +222,7 @@ All steps run locally or on a standard GitHub Actions runner. None require paid 
 | `make lint`              | 0 errors (10 fs warnings)       |
 | `make audit`             | 0 vulnerabilities               |
 | `make test`              | 10 unit + 7 security pass        |
-| `make test-ui`           | 6 passed                        |
+| `make test-ui`           | 14 passed (Chromium + WebKit)   |
 | Semgrep (js + nodejs)    | 0 findings over 68 rules        |
 | WebSocket auth probes    | 403 / 403 / 404 / 404 / 101     |
 | Security headers on `/`  | CSP + nosniff + frame + referrer|

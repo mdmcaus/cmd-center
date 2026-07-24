@@ -42,6 +42,12 @@ All notable changes to this project are documented here. The format is based on
   matching the project list, instead of following Makefile order.
 
 ### Fixed
+- Page now renders in Safari. The Content-Security-Policy no longer includes
+  `upgrade-insecure-requests` (a helmet default), which made Safari try to load
+  `styles.css`, `app.js`, and the xterm assets over https on a plain-http localhost
+  server, leaving the page unstyled with no scripts. `connect-src` also lists the
+  `ws://` origins explicitly so Safari allows the terminal WebSocket. UI tests now
+  run under WebKit as well as Chromium to catch Safari regressions.
 - `make start` now launches detached via `nohup`, refuses to start when the port is
   already in use (previously it wrote a dead PID after `EADDRINUSE`), and verifies the
   server actually came up before recording the PID.
