@@ -50,6 +50,25 @@ if the port is already held, and `make status` checks the port (not just the PID
 so a stale PID file cannot make it report the wrong state. `make stop` also clears any
 stray process still holding the port.
 
+### `cmdc`: an interactive start/stop/restart menu
+
+`cmdc.sh` provides a `cmdc` shell command with an arrow-key menu that adapts to whether
+the server is running. Source it from your shell profile (bash or zsh):
+
+```bash
+echo 'source /Users/michael/repo/claude/cmd-center/cmdc.sh' >> ~/.bashrc
+# then open a new shell, or: source ~/.bashrc
+```
+
+Run `cmdc`:
+
+- if the server is not running, the menu offers only `start`
+- if the server is running, the menu offers `stop` and `restart`
+
+Move with the arrow keys (or `j`/`k`), press Enter to choose, `q` or Esc to cancel. It
+runs the matching `make` target. Optional overrides: `CMDC_DIR` (project path) and
+`CMDC_PORT` (default `3200`).
+
 ### Autostart at login (recommended for always-on use)
 
 To have cmd-center start at login and restart automatically if it crashes, install a

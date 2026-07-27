@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- `cmdc.sh`: a sourceable `cmdc` shell command with an arrow-key menu that offers
+  `start` when the server is stopped and `stop`/`restart` when it is running, then
+  runs the matching make target.
 - Initial project scaffold.
 - ESLint with `eslint-plugin-security` and `eslint-plugin-no-unsanitized`
   (`eslint.config.js`), plus `make lint` and `make audit` targets.
