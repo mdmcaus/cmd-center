@@ -14,7 +14,7 @@ All notable changes to this project are documented here. The format is based on
 - Curated "top targets" per project via `config/top-targets.json` (keyed by project name,
   path overridable with `TOP_TARGETS_FILE`). The panel shows the curated targets first with
   a `Show all (N)` / `Show top only` toggle; projects without an entry are unchanged.
-  Configured for thepdfer-macos and pdfreader-macos (`run, build, test, lint, xcode, install`).
+  Curated sets configured for all 16 projects with a Makefile.
 - `cmdc.sh`: a sourceable `cmdc` shell command with an arrow-key menu that offers
   `start` when the server is stopped and `stop`/`restart` when it is running, then
   runs the matching make target.

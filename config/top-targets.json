@@ -18,5 +18,19 @@
     "xcode",
     "install",
     "install-cli"
-  ]
+  ],
+  "scorebar": ["run", "build", "test", "lint", "xcode", "install", "open", "clean"],
+  "shatui": ["run", "build", "test", "bench", "install", "clean"],
+  "sshtunman": ["run", "build", "test", "lint", "xcode", "install", "open", "clean"],
+  "pdfgen-macos": ["run", "build", "app", "test", "lint", "xcode", "install", "install-cli"],
+  "network-toolbox": ["run", "build", "app", "test", "lint", "xcode", "install", "open"],
+  "navigator": ["dev", "release", "install", "uninstall", "clean"],
+  "mockdoc": ["run", "build", "app", "test", "lint", "xcode", "install", "install-cli"],
+  "mdcat": ["run", "build", "test", "lint", "install", "clean"],
+  "markdown-reader": ["run", "build", "app", "test", "lint", "xcode", "install", "install-cli"],
+  "cmd-center": ["start", "stop", "restart", "status", "test", "test-ui", "lint", "open"],
+  "application-tracker": ["start", "stop", "restart", "status", "run", "build", "logs", "clean"],
+  "sudoku-solver-macos": ["run", "build", "test", "lint", "xcode", "install", "open", "clean"],
+  "url-shortener": ["start", "stop", "restart", "status", "test", "test-ui", "open", "logs"],
+  "url-shortener-k8s": ["start", "stop", "restart", "status", "test", "docker-build", "k8s-deploy", "k8s-status", "k8s-logs"]
 }
