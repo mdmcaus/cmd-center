@@ -15,10 +15,23 @@ const os = require('os');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const pty = require('node-pty');
-const { listProjects, resolveProject } = require('./lib/projects');
+const { listProjects, getProject, resolveProject, setTopTargets } = require('./lib/projects');
 
 const PORT = Number(process.env.PORT) || 3200;
 const HOST = process.env.HOST || '127.0.0.1';
+
+// Accept a request only from this app's own page. Used for the WebSocket upgrade
+// and for mutating API routes, so a malicious page the user visits cannot drive
+// the terminal or rewrite config through the user's browser.
+function allowedOrigin(origin) {
+  if (!origin) return false;
+  const allowed = new Set([
+    `http://${HOST}:${PORT}`,
+    `http://localhost:${PORT}`,
+    `http://127.0.0.1:${PORT}`,
+  ]);
+  return allowed.has(origin);
+}
 
 const app = express();
 
@@ -59,26 +72,31 @@ app.use(
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// GET /api/projects -> [{ name, path, targets:[{name,desc}] }]
+// GET /api/projects -> [{ name, path, targets:[{name,desc}], topTargets:[...] }]
 app.get('/api/projects', (_req, res) => {
   res.json({ projects: listProjects() });
+});
+
+// PUT /api/projects/:name/top-targets  Body: { topTargets: [name, ...] }
+// Saves the project's curated top-target list (order preserved). Same-origin only.
+app.put('/api/projects/:name/top-targets', (req, res) => {
+  if (!allowedOrigin(req.headers.origin)) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  const list = req.body && req.body.topTargets;
+  if (!Array.isArray(list) || !list.every((n) => typeof n === 'string')) {
+    return res.status(400).json({ error: 'topTargets must be an array of strings' });
+  }
+  const saved = setTopTargets(req.params.name, list);
+  if (saved === null) {
+    return res.status(404).json({ error: 'unknown project' });
+  }
+  return res.json({ project: getProject(req.params.name) });
 });
 
 const server = http.createServer(app);
 
 // --- WebSocket PTY endpoint: /pty?project=<name> ---
-
-// Accept the connection only from a same-origin browser context. This prevents a
-// malicious web page the user happens to visit from opening a shell on their box.
-function allowedOrigin(origin) {
-  if (!origin) return false;
-  const allowed = new Set([
-    `http://${HOST}:${PORT}`,
-    `http://localhost:${PORT}`,
-    `http://127.0.0.1:${PORT}`,
-  ]);
-  return allowed.has(origin);
-}
 
 const wss = new WebSocketServer({ noServer: true });
 

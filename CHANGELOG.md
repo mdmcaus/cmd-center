@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- In-UI editor for per-project top targets: click `Edit` in the target panel header to
+  pick which targets appear at the top, reorder them (up/down), and Save. Saves to
+  `config/top-targets.json` via a same-origin `PUT /api/projects/:name/top-targets`
+  endpoint, so it persists across restarts and browsers. Soft guidance of ~10, no hard cap.
+- Curated "top targets" per project via `config/top-targets.json` (keyed by project name,
+  path overridable with `TOP_TARGETS_FILE`). The panel shows the curated targets first with
+  a `Show all (N)` / `Show top only` toggle; projects without an entry are unchanged.
+  Configured for thepdfer-macos and pdfreader-macos (`run, build, test, lint, xcode, install`).
 - `cmdc.sh`: a sourceable `cmdc` shell command with an arrow-key menu that offers
   `start` when the server is stopped and `stop`/`restart` when it is running, then
   runs the matching make target.

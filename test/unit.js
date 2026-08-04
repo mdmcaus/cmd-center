@@ -36,8 +36,53 @@ mkproject('beta', 'all:\n\techo hi\n');
 mkproject('no-makefile', null); // directory without a Makefile -> excluded
 fs.writeFileSync(path.join(root, 'loose-file'), 'not a dir');
 
-// Require AFTER REPO_ROOT is set so the module picks it up.
-const { listProjects, resolveProject, parseTargets } = require('../lib/projects');
+// Curated top-targets config for the fixture. 'nonexistent' should be dropped
+// because alpha has no such target. Written before requiring the module, which
+// reads TOP_TARGETS_FILE once at load time.
+const topCfg = path.join(root, 'top-targets.json');
+fs.writeFileSync(topCfg, JSON.stringify({ alpha: ['build', 'nonexistent'] }));
+process.env.TOP_TARGETS_FILE = topCfg;
+
+// Require AFTER REPO_ROOT and TOP_TARGETS_FILE are set so the module picks them up.
+const { listProjects, resolveProject, setTopTargets, parseTargets } = require('../lib/projects');
+
+test('listProjects attaches curated topTargets, filtered to existing targets', () => {
+  const projects = listProjects(root);
+  const alpha = projects.find((p) => p.name === 'alpha');
+  const beta = projects.find((p) => p.name === 'beta');
+  assert.deepStrictEqual(alpha.topTargets, ['build']); // 'nonexistent' dropped, order kept
+  assert.deepStrictEqual(beta.topTargets, []); // no config entry
+});
+
+test('setTopTargets writes config, filters unknown names, and refreshes the cache', () => {
+  // beta has only target "all". Order + filtering: keep 'all', drop 'ghost'.
+  const saved = setTopTargets('beta', ['all', 'ghost'], root);
+  assert.deepStrictEqual(saved, ['all']);
+  // listProjects reflects it without a restart (cache was refreshed).
+  const beta = listProjects(root).find((p) => p.name === 'beta');
+  assert.deepStrictEqual(beta.topTargets, ['all']);
+  // Persisted to disk.
+  const onDisk = JSON.parse(fs.readFileSync(topCfg, 'utf8'));
+  assert.deepStrictEqual(onDisk.beta, ['all']);
+});
+
+test('setTopTargets preserves given order for multiple targets', () => {
+  // alpha has build, test. Save in reverse order; it must persist that order.
+  const saved = setTopTargets('alpha', ['test', 'build'], root);
+  assert.deepStrictEqual(saved, ['test', 'build']);
+  assert.deepStrictEqual(listProjects(root).find((p) => p.name === 'alpha').topTargets, ['test', 'build']);
+});
+
+test('setTopTargets with an empty list removes the project entry', () => {
+  setTopTargets('beta', [], root);
+  const onDisk = JSON.parse(fs.readFileSync(topCfg, 'utf8'));
+  assert.ok(!('beta' in onDisk));
+  assert.deepStrictEqual(listProjects(root).find((p) => p.name === 'beta').topTargets, []);
+});
+
+test('setTopTargets returns null for an unknown project', () => {
+  assert.strictEqual(setTopTargets('does-not-exist', ['x'], root), null);
+});
 
 test('listProjects finds only dirs with a Makefile', () => {
   const names = listProjects(root).map((p) => p.name);

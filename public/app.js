@@ -14,11 +14,20 @@
   const currentPathEl = document.getElementById('current-path');
   const terminalEl = document.getElementById('terminal');
   const emptyStateEl = document.getElementById('empty-state');
+  const editBtn = document.getElementById('edit-targets');
+  const editorOverlayEl = document.getElementById('editor-overlay');
+  const editorTitleEl = document.getElementById('editor-title');
+  const editorCountEl = document.getElementById('editor-count');
+  const editorTopEl = document.getElementById('editor-top');
+  const editorMoreEl = document.getElementById('editor-more');
+  const editorSaveEl = document.getElementById('editor-save');
+  const editorCancelEl = document.getElementById('editor-cancel');
 
   const SHOW_TARGETS_KEY = 'cmdcenter.showTargets';
 
   let projects = [];
   let active = null; // current project object
+  let showAllTargets = false; // when a project has a curated set, whether it is expanded
   let term = null;
   let fitAddon = null;
   let socket = null;
@@ -74,6 +83,37 @@
   }
 
   // --- target buttons ---
+
+  // Build one quick-run button for a target object { name, desc }.
+  function makeTargetButton(t) {
+    const btn = document.createElement('button');
+    btn.title = t.desc ? 'make ' + t.name + ': ' + t.desc : 'make ' + t.name;
+    const label = document.createElement('span');
+    label.textContent = 'make ' + t.name;
+    btn.appendChild(label);
+    if (t.desc) {
+      const d = document.createElement('span');
+      d.className = 'desc';
+      d.textContent = t.desc;
+      btn.appendChild(d);
+    }
+    btn.addEventListener('click', function () {
+      runTarget(t.name);
+    });
+    return btn;
+  }
+
+  function makeToggleButton(text, expand) {
+    const btn = document.createElement('button');
+    btn.className = 'targets-toggle';
+    btn.textContent = text;
+    btn.addEventListener('click', function () {
+      showAllTargets = expand;
+      renderTargets();
+    });
+    return btn;
+  }
+
   function renderTargets() {
     targetsEl.innerHTML = '';
     if (!active || !showTargetsEl.checked) {
@@ -81,35 +121,37 @@
       return;
     }
     targetsPanelEl.hidden = false;
-    // Sort targets alphabetically (case-insensitive), matching the project list.
-    const targets = (active.targets || [])
+
+    // Full list, sorted alphabetically (matches the project list).
+    const fullList = (active.targets || [])
       .slice()
       .sort(function (a, b) {
         return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
       });
-    if (!targets.length) {
+
+    if (!fullList.length) {
       const none = document.createElement('span');
       none.className = 'none';
       none.textContent = 'No make targets detected.';
       targetsEl.appendChild(none);
       return;
     }
-    for (const t of targets) {
-      const btn = document.createElement('button');
-      btn.title = t.desc ? 'make ' + t.name + ': ' + t.desc : 'make ' + t.name;
-      const label = document.createElement('span');
-      label.textContent = 'make ' + t.name;
-      btn.appendChild(label);
-      if (t.desc) {
-        const d = document.createElement('span');
-        d.className = 'desc';
-        d.textContent = t.desc;
-        btn.appendChild(d);
+
+    // Curated top targets (config order), only those that exist. Empty for most projects.
+    const byName = {};
+    for (const t of fullList) byName[t.name] = t;
+    const curated = (active.topTargets || []).map(function (name) {
+      return byName[name];
+    }).filter(Boolean);
+
+    if (curated.length && !showAllTargets) {
+      for (const t of curated) targetsEl.appendChild(makeTargetButton(t));
+      targetsEl.appendChild(makeToggleButton('Show all (' + fullList.length + ')', true));
+    } else {
+      for (const t of fullList) targetsEl.appendChild(makeTargetButton(t));
+      if (curated.length) {
+        targetsEl.appendChild(makeToggleButton('Show top only', false));
       }
-      btn.addEventListener('click', function () {
-        runTarget(t.name);
-      });
-      targetsEl.appendChild(btn);
     }
   }
 
@@ -120,9 +162,144 @@
     }
   }
 
+  // --- top-targets editor ---
+  const RECOMMENDED = 10;
+  let editTop = []; // ordered target names chosen as "top"
+  let editMore = []; // remaining target names, alphabetical
+
+  function allTargetNames() {
+    return (active && active.targets ? active.targets : [])
+      .map(function (t) {
+        return t.name;
+      })
+      .sort(function (a, b) {
+        return a.localeCompare(b, undefined, { sensitivity: 'base' });
+      });
+  }
+
+  function openEditor() {
+    if (!active) return;
+    const all = allTargetNames();
+    const current = (active.topTargets || []).filter(function (n) {
+      return all.indexOf(n) !== -1;
+    });
+    editTop = current.slice();
+    editMore = all.filter(function (n) {
+      return editTop.indexOf(n) === -1;
+    });
+    editorTitleEl.textContent = 'Top targets: ' + active.name;
+    renderEditor();
+    editorOverlayEl.hidden = false;
+  }
+
+  function closeEditor() {
+    editorOverlayEl.hidden = true;
+  }
+
+  function editRow(name, controls) {
+    const li = document.createElement('li');
+    const label = document.createElement('span');
+    label.className = 'editor-name';
+    label.textContent = name;
+    li.appendChild(label);
+    const actions = document.createElement('span');
+    actions.className = 'editor-row-actions';
+    for (const c of controls) actions.appendChild(c);
+    li.appendChild(actions);
+    return li;
+  }
+
+  function iconBtn(text, title, onClick, disabled) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    b.title = title;
+    if (disabled) b.disabled = true;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function renderEditor() {
+    editorTopEl.innerHTML = '';
+    editorMoreEl.innerHTML = '';
+
+    editTop.forEach(function (name, i) {
+      const up = iconBtn('↑', 'Move up', function () {
+        editTop.splice(i - 1, 0, editTop.splice(i, 1)[0]);
+        renderEditor();
+      }, i === 0);
+      const down = iconBtn('↓', 'Move down', function () {
+        editTop.splice(i + 1, 0, editTop.splice(i, 1)[0]);
+        renderEditor();
+      }, i === editTop.length - 1);
+      const remove = iconBtn('✕', 'Remove from top', function () {
+        editTop.splice(i, 1);
+        editMore.push(name);
+        editMore.sort(function (a, b) {
+          return a.localeCompare(b, undefined, { sensitivity: 'base' });
+        });
+        renderEditor();
+      });
+      editorTopEl.appendChild(editRow(name, [up, down, remove]));
+    });
+
+    editMore.forEach(function (name) {
+      const add = iconBtn('+', 'Add to top', function () {
+        editMore = editMore.filter(function (n) {
+          return n !== name;
+        });
+        editTop.push(name);
+        renderEditor();
+      });
+      editorMoreEl.appendChild(editRow(name, [add]));
+    });
+
+    editorCountEl.textContent = editTop.length + ' selected';
+    editorCountEl.classList.toggle('over', editTop.length > RECOMMENDED);
+  }
+
+  async function saveEditor() {
+    if (!active) return;
+    editorSaveEl.disabled = true;
+    try {
+      const res = await fetch('api/projects/' + encodeURIComponent(active.name) + '/top-targets', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topTargets: editTop }),
+      });
+      if (!res.ok) throw new Error('save failed (' + res.status + ')');
+      const data = await res.json();
+      // Update local state so the panel reflects the saved set immediately.
+      active.topTargets = data.project.topTargets;
+      const idx = projects.findIndex(function (p) {
+        return p.name === active.name;
+      });
+      if (idx !== -1) projects[idx] = data.project;
+      showAllTargets = false;
+      renderTargets();
+      closeEditor();
+    } catch (err) {
+      editorCountEl.textContent = String(err.message || 'save failed');
+      editorCountEl.classList.add('over');
+    } finally {
+      editorSaveEl.disabled = false;
+    }
+  }
+
+  editBtn.addEventListener('click', openEditor);
+  editorSaveEl.addEventListener('click', saveEditor);
+  editorCancelEl.addEventListener('click', closeEditor);
+  editorOverlayEl.addEventListener('click', function (e) {
+    if (e.target === editorOverlayEl) closeEditor();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !editorOverlayEl.hidden) closeEditor();
+  });
+
   // --- terminal / websocket ---
   function selectProject(p) {
     active = p;
+    showAllTargets = false; // each project starts collapsed to its curated set
     renderProjectList();
     renderTargets();
     currentProjectEl.textContent = p.name;

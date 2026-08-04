@@ -31,7 +31,10 @@
         <div id="workspace">
           <div id="terminal"></div>
           <aside id="targets-panel" hidden>
-            <div class="targets-head">Make targets</div>
+            <div class="targets-head">
+              <span>Make targets</span>
+              <button id="edit-targets" type="button" title="Choose top targets">Edit</button>
+            </div>
             <div id="targets"></div>
           </aside>
         </div>
@@ -40,6 +43,33 @@
           <p class="hint">You can then run <code>make</code> with any target, or any other command.</p>
         </div>
       </main>
+    </div>
+
+    <!-- Top-targets editor -->
+    <div id="editor-overlay" hidden>
+      <div id="editor" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+        <header id="editor-head">
+          <span id="editor-title">Top targets</span>
+          <span id="editor-count"></span>
+        </header>
+        <div id="editor-body">
+          <section class="editor-col">
+            <h3>Shown at top</h3>
+            <ul id="editor-top" aria-label="Top targets"></ul>
+          </section>
+          <section class="editor-col">
+            <h3>More</h3>
+            <ul id="editor-more" aria-label="Other targets"></ul>
+          </section>
+        </div>
+        <footer id="editor-foot">
+          <span class="editor-hint">Pick your most-used targets (about 10 recommended). The rest stay under "Show all".</span>
+          <div class="editor-actions">
+            <button id="editor-cancel" type="button">Cancel</button>
+            <button id="editor-save" type="button" class="primary">Save</button>
+          </div>
+        </footer>
+      </div>
     </div>
 
     <script src="vendor/xterm.js"></script>

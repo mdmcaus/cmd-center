@@ -69,6 +69,29 @@ Move with the arrow keys (or `j`/`k`), press Enter to choose, `q` or Esc to canc
 runs the matching `make` target. Optional overrides: `CMDC_DIR` (project path) and
 `CMDC_PORT` (default `3200`).
 
+### Top targets (curated per project)
+
+Projects with many make targets can be overwhelming. You can give a project a short,
+curated list of its most-used targets in `config/top-targets.json`, keyed by project name:
+
+```json
+{
+  "thepdfer-macos": ["run", "build", "test", "lint", "xcode", "install"]
+}
+```
+
+When a project has an entry, the panel shows those targets first (in the order listed) with
+a `Show all (N)` button to expand to the full alphabetical list, and `Show top only` to
+collapse. Names that do not match a real target are ignored. Projects with no entry show
+the full list as before. The config path can be overridden with the `TOP_TARGETS_FILE`
+environment variable.
+
+You do not have to edit the file by hand. Select a project and click `Edit` in the target
+panel header to open the editor: move targets between "Shown at top" and "More", reorder the
+top set with the up/down buttons (about 10 is a good number, but there is no hard limit), and
+Save. The panel updates immediately and the choice is written back to `config/top-targets.json`,
+so it persists across restarts and is the same in every browser.
+
 ### Autostart at login (recommended for always-on use)
 
 To have cmd-center start at login and restart automatically if it crashes, install a

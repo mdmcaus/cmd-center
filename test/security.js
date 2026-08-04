@@ -15,14 +15,18 @@ const WebSocket = require('ws');
 const PORT = 3399;
 const HOST = '127.0.0.1';
 
-// Fixture repo root with a single valid project.
+// Fixture repo root with a single valid project (two targets).
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cmdcenter-sec-'));
 fs.mkdirSync(path.join(root, 'demo'));
-fs.writeFileSync(path.join(root, 'demo', 'Makefile'), 'hello:\n\techo hi\n');
+fs.writeFileSync(path.join(root, 'demo', 'Makefile'), 'hello:\n\techo hi\n\nworld:\n\techo w\n');
+
+// Temp top-targets config so the real config is never touched by the endpoint tests.
+const topCfg = path.join(root, 'top-targets.json');
 
 process.env.REPO_ROOT = root;
 process.env.PORT = String(PORT);
 process.env.HOST = HOST;
+process.env.TOP_TARGETS_FILE = topCfg;
 
 const { server } = require('../server');
 
@@ -38,6 +42,37 @@ function connect(project, origin) {
   const headers = {};
   if (origin !== undefined) headers.Origin = origin;
   return new WebSocket(url, { headers });
+}
+
+function putTopTargets(name, topTargets, origin) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify({ topTargets });
+    const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) };
+    if (origin !== undefined) headers.Origin = origin;
+    const req = http.request(
+      { host: HOST, port: PORT, method: 'PUT', path: `/api/projects/${encodeURIComponent(name)}/top-targets`, headers },
+      (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => resolve({ status: res.statusCode, body: d }));
+      }
+    );
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
+function getProjects() {
+  return new Promise((resolve, reject) => {
+    http
+      .get(`http://${HOST}:${PORT}/api/projects`, (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => resolve(JSON.parse(d).projects || []));
+      })
+      .on('error', reject);
+  });
 }
 
 // Wait for a ws to either open or fail; resolve with {opened, status}.
@@ -139,6 +174,30 @@ async function run() {
   {
     const addr = server.address();
     record('server bound to loopback', addr && addr.address === '127.0.0.1', JSON.stringify(addr));
+  }
+
+  // 8. PUT top-targets from a foreign Origin is rejected (403).
+  {
+    const r = await putTopTargets('demo', ['hello'], 'http://evil.example.com');
+    record('PUT top-targets foreign Origin rejected (403)', r.status === 403, JSON.stringify(r));
+  }
+
+  // 9. PUT for an unknown project is rejected (404).
+  {
+    const r = await putTopTargets('nope', ['hello'], goodOrigin);
+    record('PUT top-targets unknown project rejected (404)', r.status === 404, JSON.stringify(r));
+  }
+
+  // 10. Valid PUT persists, filters unknown names, and preserves order.
+  {
+    const r = await putTopTargets('demo', ['world', 'ghost', 'hello'], goodOrigin);
+    const projects = await getProjects();
+    const demo = projects.find((p) => p.name === 'demo');
+    const ok =
+      r.status === 200 &&
+      demo &&
+      JSON.stringify(demo.topTargets) === JSON.stringify(['world', 'hello']);
+    record('PUT top-targets persists, filters unknown, keeps order', ok, JSON.stringify({ status: r.status, top: demo && demo.topTargets }));
   }
 }
 

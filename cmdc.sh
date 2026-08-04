@@ -1,4 +1,4 @@
-# cmdc: an interactive start/stop/restart menu for cmd-center.
+#* cmdc: an interactive start/stop/restart menu for cmd-center.
 #
 # Source this from your shell profile (bash or zsh), then run `cmdc`:
 #   source /Users/michael/repo/claude/cmd-center/cmdc.sh
