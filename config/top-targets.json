@@ -1,0 +1,22 @@
+{
+  "thepdfer-macos": [
+    "run",
+    "build",
+    "test",
+    "lint",
+    "xcode",
+    "install",
+    "install-cli",
+    "app"
+  ],
+  "pdfreader-macos": [
+    "app",
+    "build",
+    "run",
+    "test",
+    "lint",
+    "xcode",
+    "install",
+    "install-cli"
+  ]
+}
