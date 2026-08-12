@@ -129,7 +129,7 @@ server.on('upgrade', (req, socket, head) => {
 // the terminal matches the user's normal login shell.
 function shellEnv() {
   const info = os.userInfo(); // reflects the real effective uid
-  return {
+  const env = {
     ...process.env,
     USER: info.username,
     LOGNAME: info.username,
@@ -138,6 +138,11 @@ function shellEnv() {
     TERM: 'xterm-256color',
     CMD_CENTER: '1',
   };
+  // Our own listener config must not leak into project shells: a project whose
+  // Makefile says `PORT ?= 3000` would silently bind our 3200 instead.
+  delete env.PORT;
+  delete env.HOST;
+  return env;
 }
 
 wss.on('connection', (ws, _req, cwd) => {
