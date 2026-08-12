@@ -1,3 +1,5 @@
+### cmd-center
+
 # cmd-center
 
 A local web command center for your projects. It scans a repository root for every
