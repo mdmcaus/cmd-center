@@ -27,6 +27,11 @@ process.env.REPO_ROOT = root;
 process.env.PORT = String(PORT);
 process.env.HOST = HOST;
 process.env.TOP_TARGETS_FILE = topCfg;
+// Empty extra-projects config: the fixture root is the whole allowlist, so the
+// real out-of-root projects can never leak into these tests.
+const extraCfg = path.join(root, 'extra-projects.json');
+fs.writeFileSync(extraCfg, '[]');
+process.env.EXTRA_PROJECTS_FILE = extraCfg;
 
 const { server } = require('../server');
 

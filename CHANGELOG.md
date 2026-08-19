@@ -7,6 +7,15 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- Support for projects that live outside `REPO_ROOT`: list their absolute directory paths
+  in `config/extra-projects.json` (path overridable with `EXTRA_PROJECTS_FILE`) and they
+  are listed alongside the scanned projects, with the same target parsing, curated top
+  targets, and PTY allowlisting. Entries still need a `Makefile`; missing directories,
+  directories without one, and relative paths are skipped, and a scanned project always
+  wins a name collision so the config cannot redirect an existing project elsewhere. The
+  file is re-read on every scan, so `Rescan` picks up edits without a restart.
+- `newonbrew` (`/Users/michael/repo/newonbrew`) added as the first out-of-root project,
+  with curated top targets `new-file`, `commit`, and `brewupd`.
 - In-UI editor for per-project top targets: click `Edit` in the target panel header to
   pick which targets appear at the top, reorder them (up/down), and Save. Saves to
   `config/top-targets.json` via a same-origin `PUT /api/projects/:name/top-targets`

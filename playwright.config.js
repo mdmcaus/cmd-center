@@ -16,6 +16,10 @@ const PORT = 3301;
 const TOP_TARGETS_TMP = path.join(os.tmpdir(), 'cmdc-ui-top-targets.json');
 fs.writeFileSync(TOP_TARGETS_TMP, JSON.stringify({ widget: ['build'] }, null, 2) + '\n');
 
+// Empty extra-projects config so the UI suite sees only the fixture root.
+const EXTRA_PROJECTS_TMP = path.join(os.tmpdir(), 'cmdc-ui-extra-projects.json');
+fs.writeFileSync(EXTRA_PROJECTS_TMP, '[]\n');
+
 module.exports = defineConfig({
   testDir: './test',
   testMatch: '**/*.spec.js',
@@ -45,6 +49,7 @@ module.exports = defineConfig({
       HOST: '127.0.0.1',
       REPO_ROOT: require('path').join(__dirname, 'test', 'fixture-root'),
       TOP_TARGETS_FILE: TOP_TARGETS_TMP,
+      EXTRA_PROJECTS_FILE: EXTRA_PROJECTS_TMP,
     },
   },
   reporter: [['list']],

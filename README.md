@@ -3,9 +3,10 @@
 # cmd-center
 
 A local web command center for your projects. It scans a repository root for every
-directory that contains a `Makefile`, lists them in one place, and gives you a real
-interactive terminal inside any project so you can run `make` with any target (or any
-other command) without leaving the browser.
+directory that contains a `Makefile`, plus any extra project directories you list by
+absolute path, shows them in one place, and gives you a real interactive terminal inside
+any project so you can run `make` with any target (or any other command) without leaving
+the browser.
 
 This tool is meant to run only on your own machine. It intentionally opens a shell as
 your user in the selected project directory, so it binds to loopback only and refuses
@@ -13,7 +14,8 @@ connections that do not originate from its own page.
 
 ## Features
 
-- Sidebar list of all directories under the repo root that have a `Makefile`.
+- Sidebar list of all directories under the repo root that have a `Makefile`, plus any
+  out-of-root projects listed in `config/extra-projects.json`.
 - Auto-detected `make` targets (with optional `## description` comments) shown as
   quick-run buttons. A setting toggles the buttons on or off.
 - A full interactive pseudo-terminal (xterm.js + node-pty) per project, cwd'd into that
@@ -94,6 +96,25 @@ top set with the up/down buttons (about 10 is a good number, but there is no har
 Save. The panel updates immediately and the choice is written back to `config/top-targets.json`,
 so it persists across restarts and is the same in every browser.
 
+### Projects outside the repo root
+
+Discovery walks `REPO_ROOT` one level deep, so a repo that lives somewhere else is never
+listed. To include one, add its absolute directory path to `config/extra-projects.json`:
+
+```json
+[
+  "/Users/michael/repo/newonbrew"
+]
+```
+
+Each entry still has to be a directory containing a `Makefile`. Anything else is skipped:
+a missing directory, a directory with no `Makefile`, or a relative path (relative entries
+are dropped rather than resolved, so the server's working directory can never decide what
+they point at). The directory's base name becomes the project name, and a scanned project
+always wins a name collision, so this config cannot redirect an existing project somewhere
+else. The file is re-read on every scan, so `Rescan` picks up edits with no restart. The
+path can be overridden with the `EXTRA_PROJECTS_FILE` environment variable.
+
 ### Autostart at login (recommended for always-on use)
 
 To have cmd-center start at login and restart automatically if it crashes, install a
@@ -117,11 +138,14 @@ Set via environment variables (or `make VAR=value ...`):
 - `PORT` (default `3200`): port to listen on.
 - `HOST` (default `127.0.0.1`): bind address. Keep this on loopback.
 - `REPO_ROOT` (default `/Users/michael/repo/claude`): directory scanned for projects.
+- `EXTRA_PROJECTS_FILE` (default `config/extra-projects.json`): JSON array of absolute
+  paths to projects that live outside `REPO_ROOT`.
 
 ## How it works
 
 - `lib/projects.js` scans `REPO_ROOT` one level deep, keeps directories that contain a
-  file named exactly `Makefile`, and parses their targets. This same list is the
+  file named exactly `Makefile`, adds any directories listed in
+  `config/extra-projects.json`, and parses their targets. This same list is the
   security allowlist for the terminal.
 - `server.js` serves the static UI, exposes `GET /api/projects`, and upgrades
   `GET /pty?project=<name>` to a WebSocket backed by a node-pty shell in that project's
@@ -138,6 +162,9 @@ Set via environment variables (or `make VAR=value ...`):
 - The `project` query parameter is validated against the freshly-scanned Makefile
   allowlist. The terminal's working directory is never built from raw client input, so
   path traversal cannot point it at an arbitrary directory.
+- Out-of-root projects widen that allowlist only through a local config file you control.
+  The client still sends nothing but a project name, which has to match an entry in the
+  same freshly-scanned list, so the extra paths are not reachable any other way.
 - A Content-Security-Policy restricts scripts, styles, and connections to same-origin.
 
 Because the terminal runs commands as your user by design, treat this like any other
@@ -153,8 +180,8 @@ make lint        # ESLint + security plugins (0 errors expected)
 make audit       # npm dependency vulnerability check
 ```
 
-- `test/unit.js` covers project discovery and Makefile target parsing against a
-  temporary fixture directory.
+- `test/unit.js` covers project discovery (in-root and out-of-root) and Makefile target
+  parsing against temporary fixture directories.
 - `test/security.js` boots a live server against a fixture root and asserts the Origin
   check, the project allowlist, a working PTY round-trip, and loopback binding.
 - `test/ui.spec.js` drives the UI end to end with Playwright.

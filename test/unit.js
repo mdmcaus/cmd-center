@@ -43,6 +43,33 @@ const topCfg = path.join(root, 'top-targets.json');
 fs.writeFileSync(topCfg, JSON.stringify({ alpha: ['build', 'nonexistent'] }));
 process.env.TOP_TARGETS_FILE = topCfg;
 
+// Out-of-root fixture projects, reached through the extra-projects config rather
+// than the REPO_ROOT scan. Pointed at a temp file so the real config is ignored.
+const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cmdcenter-unit-outside-'));
+const gamma = path.join(outsideRoot, 'gamma');
+fs.mkdirSync(gamma, { recursive: true });
+fs.writeFileSync(path.join(gamma, 'Makefile'), 'sync: ## sync it\n\techo sync\n');
+const noMakefileOutside = path.join(outsideRoot, 'bare');
+fs.mkdirSync(noMakefileOutside, { recursive: true });
+// 'alpha' also exists in REPO_ROOT: the scanned one must win the name collision.
+const shadowAlpha = path.join(outsideRoot, 'alpha');
+fs.mkdirSync(shadowAlpha, { recursive: true });
+fs.writeFileSync(path.join(shadowAlpha, 'Makefile'), 'evil:\n\techo evil\n');
+
+const extraCfg = path.join(root, 'extra-projects.json');
+fs.writeFileSync(
+  extraCfg,
+  JSON.stringify([
+    gamma,
+    shadowAlpha,
+    noMakefileOutside, // no Makefile -> excluded
+    path.join(outsideRoot, 'does-not-exist'), // missing -> excluded
+    'relative/path', // not absolute -> excluded
+    42, // not a string -> excluded
+  ])
+);
+process.env.EXTRA_PROJECTS_FILE = extraCfg;
+
 // Require AFTER REPO_ROOT and TOP_TARGETS_FILE are set so the module picks them up.
 const { listProjects, resolveProject, setTopTargets, parseTargets } = require('../lib/projects');
 
@@ -86,7 +113,41 @@ test('setTopTargets returns null for an unknown project', () => {
 
 test('listProjects finds only dirs with a Makefile', () => {
   const names = listProjects(root).map((p) => p.name);
-  assert.deepStrictEqual(names, ['alpha', 'beta']);
+  assert.deepStrictEqual(names, ['alpha', 'beta', 'gamma']); // gamma is out-of-root
+});
+
+test('listProjects includes configured out-of-root projects', () => {
+  const gammaProject = listProjects(root).find((p) => p.name === 'gamma');
+  assert.strictEqual(gammaProject.path, gamma);
+  assert.deepStrictEqual(
+    gammaProject.targets.map((t) => t.name),
+    ['sync']
+  );
+  assert.strictEqual(gammaProject.targets[0].desc, 'sync it');
+});
+
+test('extra-projects entries that are not usable projects are skipped', () => {
+  const names = listProjects(root).map((p) => p.name);
+  assert.ok(!names.includes('bare')); // no Makefile
+  assert.ok(!names.includes('does-not-exist')); // missing directory
+  assert.ok(!names.includes('path')); // relative entry, never resolved
+});
+
+test('a scanned project wins a name collision with an extra project', () => {
+  const alphaProjects = listProjects(root).filter((p) => p.name === 'alpha');
+  assert.strictEqual(alphaProjects.length, 1); // not listed twice
+  assert.strictEqual(alphaProjects[0].path, path.join(root, 'alpha'));
+  assert.strictEqual(resolveProject('alpha', root), path.join(root, 'alpha'));
+});
+
+test('an out-of-root project resolves to its real path for the PTY cwd', () => {
+  assert.strictEqual(resolveProject('gamma', root), gamma);
+});
+
+test('setTopTargets works for an out-of-root project', () => {
+  assert.deepStrictEqual(setTopTargets('gamma', ['sync', 'ghost'], root), ['sync']);
+  assert.deepStrictEqual(listProjects(root).find((p) => p.name === 'gamma').topTargets, ['sync']);
+  setTopTargets('gamma', [], root); // leave the fixture config tidy
 });
 
 test('listProjects excludes dirs without a Makefile', () => {
@@ -152,6 +213,7 @@ test('resolveProject rejects path traversal attempts', () => {
 process.on('exit', () => {
   try {
     fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideRoot, { recursive: true, force: true });
   } catch (e) {
     /* ignore */
   }

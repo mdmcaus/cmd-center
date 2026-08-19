@@ -101,7 +101,9 @@
     "lint",
     "xcode",
     "install",
-    "install-cli"
+    "install-cli",
+    "uninstall",
+    "uninstall-cli"
   ],
   "cmd-center": [
     "start",
@@ -153,5 +155,23 @@
     "k8s-deploy",
     "k8s-status",
     "k8s-logs"
+  ],
+  "chat": [
+    "app",
+    "app-release",
+    "build-release",
+    "check-docs-wiki",
+    "clean",
+    "dmg",
+    "install",
+    "sync-docs",
+    "test",
+    "sync-docs-wiki",
+    "uninstall"
+  ],
+  "newonbrew": [
+    "new-file",
+    "commit",
+    "brewupd"
   ]
 }
