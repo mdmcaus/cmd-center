@@ -7,7 +7,9 @@
     "xcode",
     "install",
     "install-cli",
-    "app"
+    "app",
+    "uninstall",
+    "uninstall-cli"
   ],
   "pdfreader-macos": [
     "app",
