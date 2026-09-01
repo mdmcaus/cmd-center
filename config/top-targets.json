@@ -27,7 +27,8 @@
     "xcode",
     "install",
     "open",
-    "clean"
+    "clean",
+    "uninstall"
   ],
   "shatui": [
     "run",
