@@ -69,7 +69,8 @@ body {
   background: var(--hover);
 }
 
-#toggle-row {
+#toggle-row,
+.toggle-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -80,8 +81,15 @@ body {
   cursor: pointer;
   user-select: none;
 }
-#toggle-row input {
+#toggle-row input,
+.toggle-row input {
   accent-color: var(--accent);
+}
+
+/* Stacked setting rows share one divider, below the last of them. */
+.toggle-row:not(:last-of-type) {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 #project-list {

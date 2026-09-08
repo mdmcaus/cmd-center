@@ -7,6 +7,12 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- `Show target descriptions` toggle in the sidebar, next to the existing quick-run toggle.
+  Descriptions come from `## text` comments on Makefile target lines, which only `jobhunt`
+  and `newonbrew` currently use; 18 documented targets made the panel tall enough to
+  scroll, so the inline text is now off by default. The description is still available as
+  the button's hover tooltip either way, and the choice persists in `localStorage` under
+  `cmdcenter.showDescs`.
 - Site favicon generated from `Command-Center-Icon.png`. The small sizes (16, 32, and the
   `.ico`) use a crop of the central terminal emblem with a rounded-square mask, because the
   full artwork's wordmark and sub-icons are illegible below about 48px; the 180, 192, and

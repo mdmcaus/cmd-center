@@ -58,7 +58,37 @@ test('quick-run target buttons reflect the Makefile (full list)', async ({ page 
   await expect(page.locator(TARGET_BTN)).toHaveCount(2);
   await expect(page.locator('#targets')).toContainText('make build');
   await expect(page.locator('#targets')).toContainText('make test');
+  // Descriptions are off by default, so the "## " text is not rendered inline;
+  // it is still reachable as the button tooltip.
+  await expect(page.locator('#targets')).not.toContainText('compile the widget');
+  await expect(page.locator(TARGET_BTN).first()).toHaveAttribute(
+    'title',
+    'make build: compile the widget'
+  );
+  // Turning the toggle on renders it inline.
+  await page.locator('#show-descs').check();
   await expect(page.locator('#targets')).toContainText('compile the widget');
+});
+
+test('target descriptions toggle hides and shows the ## text', async ({ page }) => {
+  await page.locator('#project-list li', { hasText: 'widget' }).click();
+  await page.locator('#targets button.targets-toggle').click(); // Show all
+
+  // Default: off, so no .desc element is rendered at all.
+  await expect(page.locator('#show-descs')).not.toBeChecked();
+  await expect(page.locator('#targets button .desc')).toHaveCount(0);
+
+  await page.locator('#show-descs').check();
+  await expect(page.locator('#targets button .desc')).toHaveCount(1);
+  await expect(page.locator('#targets button .desc')).toHaveText('compile the widget');
+
+  await page.locator('#show-descs').uncheck();
+  await expect(page.locator('#targets button .desc')).toHaveCount(0);
+
+  // The preference survives a reload.
+  await page.locator('#show-descs').check();
+  await page.reload();
+  await expect(page.locator('#show-descs')).toBeChecked();
 });
 
 test('project without a curated set shows all targets and no toggle', async ({ page }) => {

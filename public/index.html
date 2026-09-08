@@ -20,9 +20,13 @@
           <h1>cmd-center</h1>
           <button id="refresh" title="Rescan projects" aria-label="Rescan projects">Rescan</button>
         </header>
-        <label id="toggle-row">
+        <label id="toggle-row" class="toggle-row">
           <input type="checkbox" id="show-targets" checked />
           <span>Show quick-run target buttons</span>
+        </label>
+        <label id="toggle-row-descs" class="toggle-row">
+          <input type="checkbox" id="show-descs" />
+          <span>Show target descriptions</span>
         </label>
         <ul id="project-list" aria-label="Projects"></ul>
         <footer id="sidebar-foot">

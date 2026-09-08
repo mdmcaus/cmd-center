@@ -8,6 +8,7 @@
   const countEl = document.getElementById('project-count');
   const refreshBtn = document.getElementById('refresh');
   const showTargetsEl = document.getElementById('show-targets');
+  const showDescsEl = document.getElementById('show-descs');
   const targetsEl = document.getElementById('targets');
   const targetsPanelEl = document.getElementById('targets-panel');
   const currentProjectEl = document.getElementById('current-project');
@@ -24,6 +25,7 @@
   const editorCancelEl = document.getElementById('editor-cancel');
 
   const SHOW_TARGETS_KEY = 'cmdcenter.showTargets';
+  const SHOW_DESCS_KEY = 'cmdcenter.showDescs';
 
   let projects = [];
   let active = null; // current project object
@@ -41,6 +43,17 @@
     renderTargets();
     // The terminal width changes when the panel shows/hides, so reflow xterm.
     sendResize();
+  });
+
+  // Descriptions come from "## text" comments on Makefile target lines. Most
+  // projects have none, but a fully documented Makefile makes the panel very
+  // tall, so this is off by default; the text stays available as a tooltip.
+  const savedDescs = localStorage.getItem(SHOW_DESCS_KEY);
+  if (savedDescs !== null) showDescsEl.checked = savedDescs === 'true';
+
+  showDescsEl.addEventListener('change', function () {
+    localStorage.setItem(SHOW_DESCS_KEY, String(showDescsEl.checked));
+    renderTargets();
   });
 
   // --- project list ---
@@ -91,7 +104,7 @@
     const label = document.createElement('span');
     label.textContent = 'make ' + t.name;
     btn.appendChild(label);
-    if (t.desc) {
+    if (t.desc && showDescsEl.checked) {
       const d = document.createElement('span');
       d.className = 'desc';
       d.textContent = t.desc;
