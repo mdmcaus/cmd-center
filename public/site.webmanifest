@@ -1,0 +1,11 @@
+{
+  "name": "cmd-center",
+  "short_name": "cmd-center",
+  "icons": [
+    { "src": "cmd-center-favicon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "cmd-center-favicon-512.png", "type": "image/png", "sizes": "512x512" }
+  ],
+  "theme_color": "#1a1b26",
+  "background_color": "#1a1b26",
+  "display": "standalone"
+}

@@ -7,6 +7,12 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- Site favicon generated from `Command-Center-Icon.png`. The small sizes (16, 32, and the
+  `.ico`) use a crop of the central terminal emblem with a rounded-square mask, because the
+  full artwork's wordmark and sub-icons are illegible below about 48px; the 180, 192, and
+  512 pixel assets keep the complete artwork. Served from `public/` as
+  `cmd-center-favicon.ico` and `cmd-center-favicon-{16,32,180,192,512}.png`, with a
+  `site.webmanifest` and a `theme-color` matching the app background.
 - Support for projects that live outside `REPO_ROOT`: list their absolute directory paths
   in `config/extra-projects.json` (path overridable with `EXTRA_PROJECTS_FILE`) and they
   are listed alongside the scanned projects, with the same target parsing, curated top
