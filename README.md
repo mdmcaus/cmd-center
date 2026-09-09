@@ -60,7 +60,7 @@ stray process still holding the port.
 the server is running. Source it from your shell profile (bash or zsh):
 
 ```bash
-echo 'source /Users/michael/repo/claude/cmd-center/cmdc.sh' >> ~/.bashrc
+echo 'source /Users/michael/repo/cmd-center/cmdc.sh' >> ~/.bashrc
 # then open a new shell, or: source ~/.bashrc
 ```
 
@@ -96,10 +96,11 @@ top set with the up/down buttons (about 10 is a good number, but there is no har
 Save. The panel updates immediately and the choice is written back to `config/top-targets.json`,
 so it persists across restarts and is the same in every browser.
 
-### Projects outside the repo root
+### Projects outside the repo roots
 
-Discovery walks `REPO_ROOT` one level deep, so a repo that lives somewhere else is never
-listed. To include one, add its absolute directory path to `config/extra-projects.json`:
+Discovery walks each root in `REPO_ROOTS` one level deep, so a repo that lives somewhere
+else is never listed. To include one, add its absolute directory path to
+`config/extra-projects.json`:
 
 ```json
 [
@@ -137,14 +138,17 @@ Set via environment variables (or `make VAR=value ...`):
 
 - `PORT` (default `3200`): port to listen on.
 - `HOST` (default `127.0.0.1`): bind address. Keep this on loopback.
-- `REPO_ROOT` (default `/Users/michael/repo/claude`): directory scanned for projects.
+- `REPO_ROOTS` (default `/Users/michael/repo/claude:/Users/michael/repo`): colon-separated
+  list of directories scanned for projects. Roots are scanned in order and the first to
+  claim a project name keeps it.
+- `REPO_ROOT`: single-root form, still honoured. Setting it replaces the whole list.
 - `EXTRA_PROJECTS_FILE` (default `config/extra-projects.json`): JSON array of absolute
-  paths to projects that live outside `REPO_ROOT`.
+  paths to projects that live outside every scanned root.
 
 ## How it works
 
-- `lib/projects.js` scans `REPO_ROOT` one level deep, keeps directories that contain a
-  file named exactly `Makefile`, adds any directories listed in
+- `lib/projects.js` scans each of `REPO_ROOTS` one level deep, keeps directories that
+  contain a file named exactly `Makefile`, adds any directories listed in
   `config/extra-projects.json`, and parses their targets. This same list is the
   security allowlist for the terminal.
 - `server.js` serves the static UI, exposes `GET /api/projects`, and upgrades

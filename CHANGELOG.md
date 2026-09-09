@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- The project now lives at `~/repo/cmd-center` as a standalone repository, extracted from
+  the `claude` monorepo with `git subtree split` so its history is intact. This puts it
+  alongside every other top-level repo in `~/repo`. Update your shell profile to source
+  `~/repo/cmd-center/cmdc.sh` from the new location.
+- Project discovery now scans **multiple** roots. `REPO_ROOTS` is a colon-separated list,
+  defaulting to `/Users/michael/repo/claude:/Users/michael/repo`, so projects in both trees
+  are listed together. Roots are scanned in order and the first to claim a project name
+  keeps it, so precedence is predictable and the PTY allowlist can never be redirected by a
+  later root. `REPO_ROOT` still works as the single-root form and replaces the whole list.
+  Because `~/repo` is now scanned directly, the `config/extra-projects.json` entries for
+  `newonbrew` and `scorebar` are redundant; they are deduplicated against the scan rather
+  than listed twice, and the file is left in place.
+
 ### Added
 - `Show target descriptions` toggle in the sidebar, next to the existing quick-run toggle.
   Descriptions come from `## text` comments on Makefile target lines, which only `jobhunt`

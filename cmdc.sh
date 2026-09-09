@@ -1,7 +1,7 @@
 #* cmdc: an interactive start/stop/restart menu for cmd-center.
 #
 # Source this from your shell profile (bash or zsh), then run `cmdc`:
-#   source /Users/michael/repo/claude/cmd-center/cmdc.sh
+#   source /Users/michael/repo/cmd-center/cmdc.sh
 #
 # Behaviour:
 #   - if the server is NOT running, the menu offers only: start
@@ -19,7 +19,7 @@ if [ -n "${BASH_SOURCE:-}" ]; then
 elif [ -n "${ZSH_VERSION:-}" ]; then
   _CMDC_DEFAULT_DIR="$(cd "$(dirname "${(%):-%N}")" && pwd)"
 else
-  _CMDC_DEFAULT_DIR="/Users/michael/repo/claude/cmd-center"
+  _CMDC_DEFAULT_DIR="/Users/michael/repo/cmd-center"
 fi
 
 # Arrow-key menu. Prints the prompt, lets the user pick one option, and sets
