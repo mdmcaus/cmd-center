@@ -23,6 +23,13 @@
   const editorMoreEl = document.getElementById('editor-more');
   const editorSaveEl = document.getElementById('editor-save');
   const editorCancelEl = document.getElementById('editor-cancel');
+  const manageBtn = document.getElementById('manage-projects');
+  const ignoreOverlayEl = document.getElementById('ignore-overlay');
+  const ignoreCountEl = document.getElementById('ignore-count');
+  const ignoreShownEl = document.getElementById('ignore-shown');
+  const ignoreHiddenEl = document.getElementById('ignore-hidden');
+  const ignoreSaveEl = document.getElementById('ignore-save');
+  const ignoreCancelEl = document.getElementById('ignore-cancel');
 
   const SHOW_TARGETS_KEY = 'cmdcenter.showTargets';
   const SHOW_DESCS_KEY = 'cmdcenter.showDescs';
@@ -306,10 +313,167 @@
     if (e.target === editorOverlayEl) closeEditor();
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !editorOverlayEl.hidden) closeEditor();
+    if (e.key !== 'Escape') return;
+    if (!editorOverlayEl.hidden) closeEditor();
+    if (!ignoreOverlayEl.hidden) closeManage();
+  });
+
+  // --- manage projects (ignore list) ---
+  // Ignoring is stored server-side as a list of project names in
+  // config/ignored-projects.json, not in localStorage: the same list is what the
+  // server filters the PTY allowlist by, so it has to live with the server.
+  let allProjects = []; // every discovered project, ignored ones included
+  let editIgnored = new Set(); // working copy, committed on Save
+
+  async function openManage() {
+    ignoreShownEl.innerHTML = '';
+    ignoreHiddenEl.innerHTML = '';
+    ignoreCountEl.classList.remove('over');
+    ignoreCountEl.textContent = 'loading…';
+    ignoreOverlayEl.hidden = false;
+    try {
+      const res = await fetch('api/projects/all');
+      if (!res.ok) throw new Error('could not load projects (' + res.status + ')');
+      const data = await res.json();
+      allProjects = data.projects || [];
+      editIgnored = new Set(
+        allProjects.filter(function (p) {
+          return p.ignored;
+        }).map(function (p) {
+          return p.name;
+        })
+      );
+      // Names ignored while their project is missing from the scan: keep them so
+      // saving does not silently drop the entry and un-ignore the project later.
+      for (const name of data.ignored || []) editIgnored.add(name);
+      renderManage();
+    } catch (err) {
+      ignoreCountEl.textContent = String(err.message || 'load failed');
+      ignoreCountEl.classList.add('over');
+    }
+  }
+
+  function closeManage() {
+    ignoreOverlayEl.hidden = true;
+  }
+
+  // One row: name, its path underneath, and the button that flips its state.
+  function manageRow(name, subtitle, control) {
+    const li = document.createElement('li');
+    const text = document.createElement('span');
+    text.className = 'editor-row-text';
+    const label = document.createElement('span');
+    label.className = 'editor-name';
+    label.textContent = name;
+    text.appendChild(label);
+    if (subtitle) {
+      const sub = document.createElement('span');
+      sub.className = 'editor-sub';
+      sub.textContent = subtitle;
+      sub.title = subtitle;
+      text.appendChild(sub);
+    }
+    li.appendChild(text);
+    const actions = document.createElement('span');
+    actions.className = 'editor-row-actions';
+    actions.appendChild(control);
+    li.appendChild(actions);
+    return li;
+  }
+
+  function renderManage() {
+    ignoreShownEl.innerHTML = '';
+    ignoreHiddenEl.innerHTML = '';
+
+    const byName = {};
+    for (const p of allProjects) byName[p.name] = p;
+
+    const shown = allProjects.filter(function (p) {
+      return !editIgnored.has(p.name);
+    });
+    // Ignored names that no longer match a discovered project still belong here,
+    // otherwise there is no way to see or undo them.
+    const hidden = [...editIgnored].sort(function (a, b) {
+      return a.localeCompare(b, undefined, { sensitivity: 'base' });
+    });
+
+    for (const p of shown) {
+      const hide = iconBtn('✕', 'Ignore ' + p.name, function () {
+        editIgnored.add(p.name);
+        renderManage();
+      });
+      ignoreShownEl.appendChild(manageRow(p.name, p.dir || p.path, hide));
+    }
+    if (!shown.length) {
+      const none = document.createElement('li');
+      none.className = 'empty';
+      none.textContent = 'Every project is ignored.';
+      ignoreShownEl.appendChild(none);
+    }
+
+    for (const name of hidden) {
+      const restore = iconBtn('+', 'Show ' + name, function () {
+        editIgnored.delete(name);
+        renderManage();
+      });
+      const known = byName[name];
+      const row = manageRow(name, known ? known.dir || known.path : 'not currently found', restore);
+      row.classList.add('is-ignored');
+      ignoreHiddenEl.appendChild(row);
+    }
+    if (!hidden.length) {
+      const none = document.createElement('li');
+      none.className = 'empty';
+      none.textContent = 'Nothing ignored.';
+      ignoreHiddenEl.appendChild(none);
+    }
+
+    ignoreCountEl.classList.remove('over');
+    ignoreCountEl.textContent = shown.length + ' shown, ' + hidden.length + ' ignored';
+  }
+
+  async function saveManage() {
+    ignoreSaveEl.disabled = true;
+    try {
+      const res = await fetch('api/ignored-projects', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ignored: [...editIgnored] }),
+      });
+      if (!res.ok) throw new Error('save failed (' + res.status + ')');
+      closeManage();
+      await loadProjects();
+      // The open project may have just been ignored; it no longer has a PTY, so
+      // drop back to the empty state rather than leaving a dead terminal up.
+      if (active && !projects.some(function (p) { return p.name === active.name; })) {
+        closeActiveProject();
+      }
+    } catch (err) {
+      ignoreCountEl.textContent = String(err.message || 'save failed');
+      ignoreCountEl.classList.add('over');
+    } finally {
+      ignoreSaveEl.disabled = false;
+    }
+  }
+
+  manageBtn.addEventListener('click', openManage);
+  ignoreSaveEl.addEventListener('click', saveManage);
+  ignoreCancelEl.addEventListener('click', closeManage);
+  ignoreOverlayEl.addEventListener('click', function (e) {
+    if (e.target === ignoreOverlayEl) closeManage();
   });
 
   // --- terminal / websocket ---
+  function closeActiveProject() {
+    active = null;
+    teardownTerminal();
+    renderProjectList();
+    renderTargets();
+    currentProjectEl.textContent = 'Select a project';
+    currentPathEl.textContent = '';
+    emptyStateEl.style.display = '';
+  }
+
   function selectProject(p) {
     active = p;
     showAllTargets = false; // each project starts collapsed to its curated set

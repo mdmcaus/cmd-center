@@ -116,6 +116,32 @@ always wins a name collision, so this config cannot redirect an existing project
 else. The file is re-read on every scan, so `Rescan` picks up edits with no restart. The
 path can be overridden with the `EXTRA_PROJECTS_FILE` environment variable.
 
+### Hiding projects you do not want listed
+
+Scanning two roots turns up everything with a `Makefile`, which is usually more than you
+want in the sidebar. Click **Manage** in the sidebar header to open the manage-projects
+screen: it lists every discovered project in two columns, **Shown** and **Ignored**. Use
+`✕` to ignore one and `+` to bring it back, then Save.
+
+Ignoring is not just a display filter. The project list doubles as the security allowlist
+for the terminal, so an ignored project is also refused a PTY — it cannot be opened even
+by asking for it directly. Un-ignoring restores both at once.
+
+The choice is saved server-side as a list of names in `config/ignored-projects.json`:
+
+```json
+[
+  "old-experiment"
+]
+```
+
+It lives with the server rather than in browser storage precisely because the server
+enforces it. The file is re-read on every scan, so edits by hand are picked up by
+`Rescan` with no restart. A name is kept even when no such project is currently found,
+so ignoring survives a repo being temporarily missing instead of silently coming back;
+those entries show in the Ignored column as "not currently found". The path can be
+overridden with the `IGNORED_PROJECTS_FILE` environment variable.
+
 ### Autostart at login (recommended for always-on use)
 
 To have cmd-center start at login and restart automatically if it crashes, install a
@@ -144,13 +170,16 @@ Set via environment variables (or `make VAR=value ...`):
 - `REPO_ROOT`: single-root form, still honoured. Setting it replaces the whole list.
 - `EXTRA_PROJECTS_FILE` (default `config/extra-projects.json`): JSON array of absolute
   paths to projects that live outside every scanned root.
+- `IGNORED_PROJECTS_FILE` (default `config/ignored-projects.json`): JSON array of project
+  names to leave out of the list entirely.
 
 ## How it works
 
 - `lib/projects.js` scans each of `REPO_ROOTS` one level deep, keeps directories that
   contain a file named exactly `Makefile`, adds any directories listed in
-  `config/extra-projects.json`, and parses their targets. This same list is the
-  security allowlist for the terminal.
+  `config/extra-projects.json`, drops anything named in `config/ignored-projects.json`,
+  and parses their targets. This same list is the security allowlist for the terminal,
+  which is why ignoring a project also takes away its terminal.
 - `server.js` serves the static UI, exposes `GET /api/projects`, and upgrades
   `GET /pty?project=<name>` to a WebSocket backed by a node-pty shell in that project's
   directory.

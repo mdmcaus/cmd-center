@@ -20,6 +20,11 @@ fs.writeFileSync(TOP_TARGETS_TMP, JSON.stringify({ widget: ['build'] }, null, 2)
 const EXTRA_PROJECTS_TMP = path.join(os.tmpdir(), 'cmdc-ui-extra-projects.json');
 fs.writeFileSync(EXTRA_PROJECTS_TMP, '[]\n');
 
+// Empty ignore list, in a temp file: the UI tests must not be affected by, or
+// write to, whatever the developer has actually chosen to ignore.
+const IGNORED_PROJECTS_TMP = path.join(os.tmpdir(), 'cmdc-ui-ignored-projects.json');
+fs.writeFileSync(IGNORED_PROJECTS_TMP, '[]\n');
+
 module.exports = defineConfig({
   testDir: './test',
   testMatch: '**/*.spec.js',
@@ -50,6 +55,7 @@ module.exports = defineConfig({
       REPO_ROOT: require('path').join(__dirname, 'test', 'fixture-root'),
       TOP_TARGETS_FILE: TOP_TARGETS_TMP,
       EXTRA_PROJECTS_FILE: EXTRA_PROJECTS_TMP,
+      IGNORED_PROJECTS_FILE: IGNORED_PROJECTS_TMP,
     },
   },
   reporter: [['list']],

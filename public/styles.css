@@ -288,11 +288,11 @@ body {
   color: var(--accent);
 }
 
-/* Top-targets editor modal */
-#editor-overlay[hidden] {
+/* Shared modal chrome: top-targets editor and manage-projects screen */
+.modal-overlay[hidden] {
   display: none;
 }
-#editor-overlay {
+.modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
@@ -301,7 +301,7 @@ body {
   justify-content: center;
   z-index: 100;
 }
-#editor {
+.modal {
   width: 560px;
   max-width: 92vw;
   max-height: 86vh;
@@ -313,24 +313,24 @@ body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
-#editor-head {
+.modal-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
 }
-#editor-title {
+.modal-title {
   font-weight: 600;
 }
-#editor-count {
+.modal-count {
   font-size: 12px;
   color: var(--muted);
 }
-#editor-count.over {
+.modal-count.over {
   color: #e0af68;
 }
-#editor-body {
+.modal-body {
   display: flex;
   gap: 12px;
   padding: 14px 16px;
@@ -396,7 +396,7 @@ body {
   opacity: 0.3;
   cursor: default;
 }
-#editor-foot {
+.modal-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -432,4 +432,49 @@ body {
 }
 .editor-actions button.primary:hover {
   background: var(--accent);
+}
+
+/* Manage-projects screen: two columns of project rows, each with its path. */
+.modal.wide {
+  width: 680px;
+}
+.editor-col li.is-ignored .editor-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.editor-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.editor-sub {
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-col .empty {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 4px 2px;
+}
+
+#sidebar-head-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+#manage-projects {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+#manage-projects:hover {
+  background: var(--hover);
 }

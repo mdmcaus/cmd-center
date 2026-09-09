@@ -32,6 +32,10 @@ process.env.TOP_TARGETS_FILE = topCfg;
 const extraCfg = path.join(root, 'extra-projects.json');
 fs.writeFileSync(extraCfg, '[]');
 process.env.EXTRA_PROJECTS_FILE = extraCfg;
+// Temp ignore config, likewise, so these tests never write the real one.
+const ignoreCfg = path.join(root, 'ignored-projects.json');
+fs.writeFileSync(ignoreCfg, '[]');
+process.env.IGNORED_PROJECTS_FILE = ignoreCfg;
 
 const { server } = require('../server');
 
@@ -56,6 +60,25 @@ function putTopTargets(name, topTargets, origin) {
     if (origin !== undefined) headers.Origin = origin;
     const req = http.request(
       { host: HOST, port: PORT, method: 'PUT', path: `/api/projects/${encodeURIComponent(name)}/top-targets`, headers },
+      (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => resolve({ status: res.statusCode, body: d }));
+      }
+    );
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
+function putIgnored(body, origin) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) };
+    if (origin !== undefined) headers.Origin = origin;
+    const req = http.request(
+      { host: HOST, port: PORT, method: 'PUT', path: '/api/ignored-projects', headers },
       (res) => {
         let d = '';
         res.on('data', (c) => (d += c));
@@ -203,6 +226,48 @@ async function run() {
       demo &&
       JSON.stringify(demo.topTargets) === JSON.stringify(['world', 'hello']);
     record('PUT top-targets persists, filters unknown, keeps order', ok, JSON.stringify({ status: r.status, top: demo && demo.topTargets }));
+  }
+
+  // 11. The ignore list is a mutating route: foreign Origin must be refused.
+  {
+    const r = await putIgnored({ ignored: ['demo'] }, 'http://evil.example.com');
+    const still = await getProjects();
+    const ok = r.status === 403 && still.some((p) => p.name === 'demo');
+    record('PUT ignored-projects foreign Origin rejected (403)', ok, JSON.stringify({ status: r.status }));
+  }
+
+  // 12. Body must be an array of strings.
+  {
+    const r = await putIgnored({ ignored: 'demo' }, goodOrigin);
+    record('PUT ignored-projects rejects non-array body (400)', r.status === 400, JSON.stringify(r));
+  }
+
+  // 13. Ignoring a project removes it from the list AND takes away its PTY.
+  //     This is the important one: the list is the allowlist, so ignoring has to
+  //     fail closed rather than merely hiding the project in the sidebar.
+  {
+    const put = await putIgnored({ ignored: ['demo'] }, goodOrigin);
+    const after = await getProjects();
+    const ws = connect('demo', goodOrigin);
+    const r = await outcome(ws);
+    ws.terminate();
+    const ok =
+      put.status === 200 &&
+      !after.some((p) => p.name === 'demo') &&
+      r.opened === false &&
+      r.status === 404;
+    record('ignored project is hidden and refused a PTY (404)', ok, JSON.stringify({ put: put.status, listed: after.map((p) => p.name), ws: r }));
+  }
+
+  // 14. Un-ignoring restores both the listing and the terminal.
+  {
+    await putIgnored({ ignored: [] }, goodOrigin);
+    const after = await getProjects();
+    const ws = connect('demo', goodOrigin);
+    const r = await outcome(ws);
+    ws.terminate();
+    const ok = after.some((p) => p.name === 'demo') && r.opened === true;
+    record('un-ignoring restores the project and its PTY', ok, JSON.stringify({ listed: after.map((p) => p.name), ws: r }));
   }
 }
 

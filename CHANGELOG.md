@@ -20,7 +20,22 @@ All notable changes to this project are documented here. The format is based on
   `newonbrew` and `scorebar` are redundant; they are deduplicated against the scan rather
   than listed twice, and the file is left in place.
 
+### Fixed
+- The top-targets config is now held in a `Map` rather than a plain object. Project
+  names come from directory names, so a project called `__proto__` previously hit the
+  prototype setter on save and its curated set was silently dropped from the file;
+  a name matching an inherited property such as `constructor` was only saved from
+  being misread by the existing `Array.isArray` guard. Both are now inert data.
+
 ### Added
+- **Manage projects** screen, opened from the new `Manage` button in the sidebar header.
+  Lists every discovered project in a Shown/Ignored pair of columns with its parent
+  directory, so the two roots are easy to tell apart; `✕` ignores one, `+` brings it back.
+  Ignoring is enforced server-side rather than being a display filter: the project list is
+  the PTY allowlist, so an ignored project is also refused a terminal. Saved as a list of
+  names in `config/ignored-projects.json` (overridable with `IGNORED_PROJECTS_FILE`),
+  re-read on every scan. A name stays ignored even when no such project is currently
+  found, so ignoring survives a repo being temporarily missing.
 - `Show target descriptions` toggle in the sidebar, next to the existing quick-run toggle.
   Descriptions come from `## text` comments on Makefile target lines, which only `jobhunt`
   and `newonbrew` currently use; 18 documented targets made the panel tall enough to

@@ -155,3 +155,35 @@ test('clicking a target button runs make in the terminal', async ({ page }) => {
     timeout: 8000,
   });
 });
+
+test('manage-projects screen ignores a project and restores it', async ({ page }) => {
+  await page.locator('#manage-projects').click();
+  // Both fixture projects start visible; nothing is ignored.
+  await expect(page.locator('#ignore-shown li')).toHaveCount(2);
+  await expect(page.locator('#ignore-hidden')).toContainText('Nothing ignored');
+
+  // Ignore 'gadget' and save: it leaves the sidebar.
+  await page.locator('#ignore-shown li', { hasText: 'gadget' }).locator('button').click();
+  await expect(page.locator('#ignore-hidden li')).toHaveCount(1);
+  await page.locator('#ignore-save').click();
+  await expect(page.locator('#project-list li')).toHaveCount(1);
+  await expect(page.locator('#project-list')).not.toContainText('gadget');
+
+  // Reopen: the ignored project is loaded back from the server, not lost.
+  await page.locator('#manage-projects').click();
+  await expect(page.locator('#ignore-hidden li', { hasText: 'gadget' })).toBeVisible();
+
+  // Restore it and save: it comes back.
+  await page.locator('#ignore-hidden li', { hasText: 'gadget' }).locator('button').click();
+  await page.locator('#ignore-save').click();
+  await expect(page.locator('#project-list li')).toHaveCount(2);
+  await expect(page.locator('#project-list')).toContainText('gadget');
+});
+
+test('Cancel on the manage screen discards the change', async ({ page }) => {
+  await page.locator('#manage-projects').click();
+  await page.locator('#ignore-shown li', { hasText: 'widget' }).locator('button').click();
+  await page.locator('#ignore-cancel').click();
+  await expect(page.locator('#project-list li')).toHaveCount(2);
+  await expect(page.locator('#project-list')).toContainText('widget');
+});

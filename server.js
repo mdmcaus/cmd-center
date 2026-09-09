@@ -15,7 +15,15 @@ const os = require('os');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const pty = require('node-pty');
-const { listProjects, getProject, resolveProject, setTopTargets } = require('./lib/projects');
+const {
+  listProjects,
+  listAllProjects,
+  listIgnoredProjects,
+  setIgnoredProjects,
+  getProject,
+  resolveProject,
+  setTopTargets,
+} = require('./lib/projects');
 
 const PORT = Number(process.env.PORT) || 3200;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -73,8 +81,40 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // GET /api/projects -> [{ name, path, targets:[{name,desc}], topTargets:[...] }]
+// Ignored projects are already filtered out; this is the list the sidebar shows.
 app.get('/api/projects', (_req, res) => {
   res.json({ projects: listProjects() });
+});
+
+// The directory a project sits in, shortened for display: the full path is too
+// long for a list row, and the parent is what actually distinguishes two
+// same-named projects found under different roots.
+function displayDir(projectPath) {
+  const dir = path.dirname(projectPath);
+  const home = os.homedir();
+  return dir === home || dir.startsWith(home + path.sep) ? '~' + dir.slice(home.length) : dir;
+}
+
+// GET /api/projects/all -> every discovered project, each with `ignored: bool`
+// and a display-friendly `dir`. The manage-projects screen needs the ignored
+// ones too, to offer them back.
+app.get('/api/projects/all', (_req, res) => {
+  const projects = listAllProjects().map((p) => ({ ...p, dir: displayDir(p.path) }));
+  res.json({ projects, ignored: listIgnoredProjects() });
+});
+
+// PUT /api/ignored-projects  Body: { ignored: [name, ...] }
+// Replaces the ignore list. Same-origin only, like every other mutating route.
+app.put('/api/ignored-projects', (req, res) => {
+  if (!allowedOrigin(req.headers.origin)) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  const list = req.body && req.body.ignored;
+  if (!Array.isArray(list) || !list.every((n) => typeof n === 'string')) {
+    return res.status(400).json({ error: 'ignored must be an array of strings' });
+  }
+  const saved = setIgnoredProjects(list);
+  return res.json({ ignored: saved, projects: listAllProjects() });
 });
 
 // PUT /api/projects/:name/top-targets  Body: { topTargets: [name, ...] }

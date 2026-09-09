@@ -34,6 +34,9 @@ function mkproject(name, makefile) {
 mkproject('alpha', '.PHONY: build test\n\nbuild: ## build the thing\n\techo build\n\ntest:\n\techo test\n');
 mkproject('beta', 'all:\n\techo hi\n');
 mkproject('no-makefile', null); // directory without a Makefile -> excluded
+// A directory name that is also a dangerous object key. Project names come from
+// the filesystem, so this is reachable by anyone who can make a directory.
+mkproject('__proto__', 'build:\n\techo b\n\ntest:\n\techo t\n');
 fs.writeFileSync(path.join(root, 'loose-file'), 'not a dir');
 
 // Curated top-targets config for the fixture. 'nonexistent' should be dropped
@@ -70,8 +73,20 @@ fs.writeFileSync(
 );
 process.env.EXTRA_PROJECTS_FILE = extraCfg;
 
+// Ignore-list config, also pointed at a temp file so the real one is untouched.
+const ignoreCfg = path.join(root, 'ignored-projects.json');
+process.env.IGNORED_PROJECTS_FILE = ignoreCfg;
+
 // Require AFTER REPO_ROOT and TOP_TARGETS_FILE are set so the module picks them up.
-const { listProjects, resolveProject, setTopTargets, parseTargets } = require('../lib/projects');
+const {
+  listProjects,
+  listAllProjects,
+  listIgnoredProjects,
+  setIgnoredProjects,
+  resolveProject,
+  setTopTargets,
+  parseTargets,
+} = require('../lib/projects');
 
 test('listProjects attaches curated topTargets, filtered to existing targets', () => {
   const projects = listProjects(root);
@@ -113,7 +128,7 @@ test('setTopTargets returns null for an unknown project', () => {
 
 test('listProjects finds only dirs with a Makefile', () => {
   const names = listProjects(root).map((p) => p.name);
-  assert.deepStrictEqual(names, ['alpha', 'beta', 'gamma']); // gamma is out-of-root
+  assert.deepStrictEqual(names, ['__proto__', 'alpha', 'beta', 'gamma']); // gamma is out-of-root
 });
 
 test('listProjects includes configured out-of-root projects', () => {
@@ -207,6 +222,94 @@ test('resolveProject rejects path traversal attempts', () => {
   assert.strictEqual(resolveProject('..', root), null);
   assert.strictEqual(resolveProject('alpha/../beta', root), null);
   assert.strictEqual(resolveProject('/etc', root), null);
+});
+
+// --- prototype-hostile project names ---
+// The top-targets config is keyed by project name, so a project called
+// "__proto__" must round-trip as ordinary data and must not reach the prototype
+// chain. This is why that config is held in a Map rather than a plain object.
+
+test('a project named __proto__ saves and reads back its top targets', () => {
+  const saved = setTopTargets('__proto__', ['test'], root);
+  assert.deepStrictEqual(saved, ['test']);
+  const project = listProjects(root).find((p) => p.name === '__proto__');
+  assert.deepStrictEqual(project.topTargets, ['test']);
+  // Written to the file as a real key, not swallowed by the __proto__ setter.
+  const onDisk = JSON.parse(fs.readFileSync(topCfg, 'utf8'));
+  assert.deepStrictEqual(Object.keys(onDisk).sort(), ['__proto__', 'alpha']);
+  // And nothing leaked onto the global prototype.
+  assert.strictEqual({}.test, undefined);
+  assert.strictEqual(setTopTargets('__proto__', [], root).length, 0);
+});
+
+test('a project named after an inherited property gets no curated set', () => {
+  // 'constructor' is not in the config; reading it must yield [] rather than
+  // Object.prototype.constructor.
+  const dir = mkproject('constructor', 'only:\n\techo o\n');
+  assert.ok(fs.existsSync(dir));
+  const project = listProjects(root).find((p) => p.name === 'constructor');
+  assert.deepStrictEqual(project.topTargets, []);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// --- ignore list ---
+// These run last and leave the ignore config empty again, so they cannot affect
+// the assertions above regardless of ordering.
+
+test('setIgnoredProjects hides a project from listProjects', () => {
+  setIgnoredProjects(['beta']);
+  const names = listProjects(root).map((p) => p.name);
+  assert.ok(names.includes('alpha'), 'alpha still listed');
+  assert.ok(!names.includes('beta'), 'beta hidden');
+  setIgnoredProjects([]);
+});
+
+test('an ignored project is refused a PTY cwd (allowlist is the same list)', () => {
+  setIgnoredProjects(['beta']);
+  assert.strictEqual(resolveProject('beta', root), null);
+  setIgnoredProjects([]);
+  assert.strictEqual(resolveProject('beta', root), path.join(root, 'beta'));
+});
+
+test('ignoring works for out-of-root projects too', () => {
+  setIgnoredProjects(['gamma']);
+  assert.ok(!listProjects(root).some((p) => p.name === 'gamma'));
+  assert.strictEqual(resolveProject('gamma', root), null);
+  setIgnoredProjects([]);
+});
+
+test('listAllProjects keeps ignored projects, flagged', () => {
+  setIgnoredProjects(['beta']);
+  const all = listAllProjects(root);
+  const beta = all.find((p) => p.name === 'beta');
+  const alpha = all.find((p) => p.name === 'alpha');
+  assert.ok(beta, 'beta present in the full list');
+  assert.strictEqual(beta.ignored, true);
+  assert.strictEqual(alpha.ignored, false);
+  setIgnoredProjects([]);
+});
+
+test('setIgnoredProjects drops junk, de-duplicates, and sorts', () => {
+  const saved = setIgnoredProjects(['zeta', 'alpha', 'zeta', '..', '', 'a/b', 42, null, 'a\\b']);
+  assert.deepStrictEqual(saved, ['alpha', 'zeta']);
+  assert.deepStrictEqual(listIgnoredProjects(), ['alpha', 'zeta']);
+  setIgnoredProjects([]);
+});
+
+test('a name can be ignored even when no such project exists', () => {
+  // Ignoring must survive a project being temporarily missing, so the setter
+  // does not validate against the current scan.
+  const saved = setIgnoredProjects(['not-scanned-yet']);
+  assert.deepStrictEqual(saved, ['not-scanned-yet']);
+  setIgnoredProjects([]);
+  assert.deepStrictEqual(listIgnoredProjects(), []);
+});
+
+test('a malformed ignore config is treated as nothing ignored', () => {
+  fs.writeFileSync(ignoreCfg, 'not json at all');
+  assert.deepStrictEqual(listIgnoredProjects(), []);
+  assert.ok(listProjects(root).some((p) => p.name === 'beta'));
+  setIgnoredProjects([]);
 });
 
 // Cleanup.

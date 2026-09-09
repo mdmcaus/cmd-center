@@ -18,7 +18,10 @@
       <aside id="sidebar">
         <header id="sidebar-head">
           <h1>cmd-center</h1>
-          <button id="refresh" title="Rescan projects" aria-label="Rescan projects">Rescan</button>
+          <div id="sidebar-head-actions">
+            <button id="manage-projects" title="Show or ignore projects" aria-label="Manage projects">Manage</button>
+            <button id="refresh" title="Rescan projects" aria-label="Rescan projects">Rescan</button>
+          </div>
         </header>
         <label id="toggle-row" class="toggle-row">
           <input type="checkbox" id="show-targets" checked />
@@ -56,13 +59,13 @@
     </div>
 
     <!-- Top-targets editor -->
-    <div id="editor-overlay" hidden>
-      <div id="editor" role="dialog" aria-modal="true" aria-labelledby="editor-title">
-        <header id="editor-head">
-          <span id="editor-title">Top targets</span>
-          <span id="editor-count"></span>
+    <div id="editor-overlay" class="modal-overlay" hidden>
+      <div id="editor" class="modal" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+        <header id="editor-head" class="modal-head">
+          <span id="editor-title" class="modal-title">Top targets</span>
+          <span id="editor-count" class="modal-count"></span>
         </header>
-        <div id="editor-body">
+        <div id="editor-body" class="modal-body">
           <section class="editor-col">
             <h3>Shown at top</h3>
             <ul id="editor-top" aria-label="Top targets"></ul>
@@ -72,11 +75,38 @@
             <ul id="editor-more" aria-label="Other targets"></ul>
           </section>
         </div>
-        <footer id="editor-foot">
+        <footer id="editor-foot" class="modal-foot">
           <span class="editor-hint">Pick your most-used targets (about 10 recommended). The rest stay under "Show all".</span>
           <div class="editor-actions">
             <button id="editor-cancel" type="button">Cancel</button>
             <button id="editor-save" type="button" class="primary">Save</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Manage projects: choose which discovered projects appear -->
+    <div id="ignore-overlay" class="modal-overlay" hidden>
+      <div id="ignore-modal" class="modal wide" role="dialog" aria-modal="true" aria-labelledby="ignore-title">
+        <header class="modal-head">
+          <span id="ignore-title" class="modal-title">Manage projects</span>
+          <span id="ignore-count" class="modal-count"></span>
+        </header>
+        <div class="modal-body">
+          <section class="editor-col">
+            <h3>Shown</h3>
+            <ul id="ignore-shown" aria-label="Shown projects"></ul>
+          </section>
+          <section class="editor-col">
+            <h3>Ignored</h3>
+            <ul id="ignore-hidden" aria-label="Ignored projects"></ul>
+          </section>
+        </div>
+        <footer class="modal-foot">
+          <span class="editor-hint">Ignored projects are hidden from the sidebar and cannot open a terminal.</span>
+          <div class="editor-actions">
+            <button id="ignore-cancel" type="button">Cancel</button>
+            <button id="ignore-save" type="button" class="primary">Save</button>
           </div>
         </footer>
       </div>
