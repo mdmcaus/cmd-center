@@ -13,19 +13,11 @@ WORKDIR    := $(shell pwd)
 .PHONY: all install start stop restart status logs open run \
         test test-unit test-security test-ui test-all test-ci \
         lint audit install-agent uninstall-agent agent-status \
-        docker-build docker-up docker-down docker-restart docker-logs \
-        docker-status docker-shell docker-clean docker-portcheck \
         clean help
 
 all: help
 
 # ── Development ───────────────────────────────────────────────────────────────
-
-# Is the cmd-center container up? The lifecycle targets below ask this first,
-# because once the container publishes PORT there is no node process to find and
-# the port is held by OrbStack's forwarding helper. Without this check, "status"
-# would report that helper as a running server and "stop" would try to kill it.
-DOCKER_PS = docker compose ps --status running -q app 2>/dev/null
 
 ## Install npm dependencies (also fixes node-pty spawn-helper permissions)
 install:
@@ -39,14 +31,7 @@ run:
 
 ## Start the server in the background (detached, survives closing the terminal)
 start:
-	@CID=$$($(DOCKER_PS)); \
-	if [ -n "$$CID" ]; then \
-	  echo "cmd-center is already running in Docker on this machine."; \
-	  echo "See 'make docker-status'. Run 'make docker-down' first if you"; \
-	  echo "want the node instance instead."; \
-	  exit 0; \
-	fi; \
-	if [ -f $(PID_FILE) ] && kill -0 $$(cat $(PID_FILE)) 2>/dev/null; then \
+	@if [ -f $(PID_FILE) ] && kill -0 $$(cat $(PID_FILE)) 2>/dev/null; then \
 	  echo "Server already running (PID $$(cat $(PID_FILE)))"; exit 0; \
 	fi; \
 	OTHER=$$(lsof -tiTCP:$(PORT) -sTCP:LISTEN 2>/dev/null); \
@@ -70,13 +55,7 @@ start:
 
 ## Stop the background server (also clears any stray process holding the port)
 stop:
-	@CID=$$($(DOCKER_PS)); \
-	if [ -n "$$CID" ]; then \
-	  echo "cmd-center is running in Docker. Stopping the container."; \
-	  docker compose down; \
-	  exit 0; \
-	fi; \
-	STOPPED=0; \
+	@STOPPED=0; \
 	if [ -f $(PID_FILE) ] && kill -0 $$(cat $(PID_FILE)) 2>/dev/null; then \
 	  kill $$(cat $(PID_FILE)) 2>/dev/null && STOPPED=1; \
 	fi; \
@@ -100,18 +79,7 @@ restart: stop start
 
 ## Show server status (checks the port, not just the PID file) and last 10 log lines
 status:
-	@CID=$$($(DOCKER_PS)); \
-	if [ -n "$$CID" ]; then \
-	  HEALTH=$$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' $$CID); \
-	  MAPPED=$$(docker inspect -f '{{range $$p, $$c := .NetworkSettings.Ports}}{{range $$c}}{{.HostIp}}:{{.HostPort}}{{end}}{{end}}' $$CID); \
-	  echo "Running in Docker  container $$(echo $$CID | cut -c1-12)  health $$HEALTH"; \
-	  echo "url:  http://$$MAPPED"; \
-	  echo ""; \
-	  echo "--- last 10 container log lines ---"; \
-	  docker compose logs --no-log-prefix --tail 10 app 2>/dev/null; \
-	  exit 0; \
-	fi; \
-	LPID=$$(lsof -tiTCP:$(PORT) -sTCP:LISTEN 2>/dev/null); \
+	@LPID=$$(lsof -tiTCP:$(PORT) -sTCP:LISTEN 2>/dev/null); \
 	if [ -n "$$LPID" ]; then \
 	  echo "Running  PID $$LPID  ->  $(BASE_URL)"; \
 	  if [ -f $(PID_FILE) ] && [ "$$(cat $(PID_FILE))" != "$$LPID" ]; then \
@@ -120,17 +88,14 @@ status:
 	else \
 	  echo "Stopped"; \
 	fi
-	@CID=$$($(DOCKER_PS)); \
-	if [ -z "$$CID" ] && [ -f $(LOG_FILE) ]; then \
+	@if [ -f $(LOG_FILE) ]; then \
 	  echo ""; echo "--- last 10 log lines ---"; \
 	  tail -10 $(LOG_FILE); \
 	fi
 
 ## Tail the server log
 logs:
-	@CID=$$($(DOCKER_PS)); \
-	if [ -n "$$CID" ]; then docker compose logs -f app; exit 0; fi; \
-	tail -f $(LOG_FILE)
+	@tail -f $(LOG_FILE)
 
 ## Open the app in the default browser
 open:
@@ -171,70 +136,6 @@ agent-status:
 	else \
 	  echo "LaunchAgent not loaded"; \
 	fi
-
-# ── Docker (OrbStack) ─────────────────────────────────────────────────────────
-#
-# The container runs a linux shell, so make targets that need Xcode, swift,
-# codesign or launchctl cannot work inside it. See docker-deploy.md.
-
-DOCKER_HOST_PORT ?= $(shell grep -E '^HOST_PORT=' .env 2>/dev/null | cut -d= -f2)
-DOCKER_PORT       = $(or $(DOCKER_HOST_PORT),3201)
-DOCKER_URL        = http://127.0.0.1:$(DOCKER_PORT)
-
-## Build the Docker image (compiles node-pty for linux; first build is slow)
-docker-build:
-	docker compose build
-
-## Start the container in the background (refuses to take a port already in use)
-docker-up: docker-portcheck
-	docker compose up -d
-	@echo "cmd-center container -> $(DOCKER_URL)"
-
-# The host instance lives on 3200 and is the only one that can build the macOS
-# projects. Publishing the container onto an occupied port would either fail
-# cryptically or, worse, leave you driving the wrong instance without noticing.
-docker-portcheck:
-	@OTHER=$$(lsof -tiTCP:$(DOCKER_PORT) -sTCP:LISTEN 2>/dev/null | head -1); \
-	CID=$$(docker compose ps -q app 2>/dev/null); \
-	if [ -n "$$OTHER" ] && [ -z "$$CID" ]; then \
-	  echo "Port $(DOCKER_PORT) is already in use by PID $$OTHER."; \
-	  echo "The host instance uses 3200. Set HOST_PORT to a free port in .env,"; \
-	  echo "or stop whatever holds $(DOCKER_PORT) first."; \
-	  exit 1; \
-	fi
-
-## Stop and remove the container
-docker-down:
-	docker compose down
-
-## Rebuild and restart the container
-docker-restart: docker-portcheck
-	docker compose up -d --build
-	@echo "cmd-center container -> $(DOCKER_URL)"
-
-## Tail the container log
-docker-logs:
-	docker compose logs -f
-
-## Show container state and health
-docker-status:
-	@docker compose ps 2>/dev/null || true
-	@CID=$$(docker compose ps -q app 2>/dev/null); \
-	if [ -n "$$CID" ]; then \
-	  echo ""; \
-	  echo "health: $$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' $$CID)"; \
-	  echo "url:    $(DOCKER_URL)"; \
-	else \
-	  echo "Container not running"; \
-	fi
-
-## Open a shell inside the running container
-docker-shell:
-	docker compose exec app bash
-
-## Remove the container and its image
-docker-clean:
-	docker compose down --rmi local
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 

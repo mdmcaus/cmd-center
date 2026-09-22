@@ -38,9 +38,8 @@ allowlist.
 | --- | --- | --- |
 | `lib/projects.js` | ~349 | Project discovery, Makefile target parsing, the allowlist. Largest server file |
 | `public/app.js` | ~569 | The whole front end: sidebar, target list, xterm.js wiring. No framework, no bundler |
-| `server.js` | ~310 | Express routes, the WebSocket upgrade handler, PTY spawn |
+| `server.js` | ~243 | Express routes, the WebSocket upgrade handler, PTY spawn |
 | `config/*.json` | | Three small config files, described below |
-| `Dockerfile`, `docker-compose.yml` | | The container build, described below |
 
 ## Project discovery
 
@@ -80,7 +79,6 @@ directory scan itself.
 ## Request flow
 
 ```
-GET /api/health          ->  {ok:true}, no filesystem work (container healthcheck)
 GET /api/projects        ->  scan roots  ->  [{name, dir, targets}]
 GET /api/projects/all    ->  same, including ignored, for the admin view
 
@@ -134,54 +132,14 @@ the allowlist and origin checks from regressing. ESLint is configured in
 `launchd/com.mdmcaus.cmd-center.plist.template` is the launchd job for running
 this at login. It is a template: paths get substituted at install time.
 
-## Running in a container
-
-`Dockerfile` and `docker-compose.yml` package this for OrbStack on macOS,
-matching the pattern in `~/repo/jobhunt`. `docker-deploy.md` is the operator
-guide; the decisions that are not obvious from the files:
-
-**The repo roots are mounted at their real host paths.** `/Users/michael/repo`
-is mounted at `/Users/michael/repo`, not at `/repos`. `config/extra-projects.json`
-stores absolute host paths and `DEFAULT_REPO_ROOTS` is absolute, so an identical
-path removes the whole translation problem and keeps the extras file working
-untouched. Anything else would mean rewriting every one of those paths.
-
-**node-pty compiles at build time.** Version 1.1.0 ships prebuilds for darwin
-and win32 only. The build stage installs `python3 make g++` and compiles it; the
-runtime stage copies only the resulting `node_modules`, so no compiler ships.
-
-**The container runs as uid 1000 because that uid has a passwd entry.**
-`os.userInfo()` throws `ERR_SYSTEM_ERROR` for a uid that does not, which is why
-`shellEnv()` now guards it. Under OrbStack, bind-mounted macOS files are
-presented as owned by whatever uid the container runs as, so matching the host's
-501:20 buys nothing.
-
-**Two of the three security properties at the top of this file are enforced
-differently in the container, and one of them is why `ALLOWED_ORIGINS` exists.** The loopback bind
-moves to the host side, because a loopback listener inside a container is
-unreachable through a published port; compose publishes to `127.0.0.1` only. The
-origin check had to gain `ALLOWED_ORIGINS`, because the browser's `Origin`
-carries the published host port while the process listens on 3200, and a
-mismatch made every WebSocket upgrade 403 while the page still loaded.
-`ALLOWED_ORIGINS_ONLY=1`, which compose sets, drops the port-derived origins so
-the container trusts only what it is published on. The allowlist itself is
-unchanged. All of this is covered by `test/security.js`.
-
-**What the container cannot do.** Its shell is Linux. 15 of the 18 discovered
-projects have Makefiles calling `xcodebuild`, `swift`, `codesign`, `notarytool`,
-`hdiutil`, `launchctl`, `open` or `magick`. Those fail there by design; the host
-instance remains the way to drive macOS app builds.
-
 ## Related docs
 
-`README.md`, `docker-deploy.md`, `PLAN-cmd-center-docker.md`,
-`cmd-center_testplan.md`, `EXTERNAL_TEST.md`, `RELEASING.md`, `CHANGELOG.md`.
+`README.md`, `cmd-center_testplan.md`, `EXTERNAL_TEST.md`, `RELEASING.md`,
+`CHANGELOG.md`.
 
 ## Keeping this file true
 
 Update it when the discovery rules change, when a route is added, or when a
 decision recorded here is reversed. The three security properties at the top are
 the load bearing part: if a change touches origin checking, the allowlist, or
-how the PTY cwd is chosen, it changes this file too. The container section is
-part of that: it records how two of those three properties are enforced
-differently when this runs in Docker.
+how the PTY cwd is chosen, it changes this file too.
