@@ -1,0 +1,70 @@
+services:
+  app:
+    build: .
+    image: cmd-center:latest
+    container_name: cmd-center
+    restart: unless-stopped
+    init: true
+
+    # uid 1000 is the node user baked into the image, and it is the default for a
+    # reason: it has a passwd entry. Overriding this with the host's own uid
+    # (501:20 on macOS) leaves the container with an account that os.userInfo()
+    # cannot resolve, so the shell comes up nameless and homeless. Under OrbStack
+    # the bind mounts below are remapped to whichever uid runs, so using 1000
+    # costs nothing in file access.
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+
+    environment:
+      PORT: "3200"
+      HOST: "0.0.0.0"
+
+      # The browser's Origin carries the published host port, not the container's
+      # port. With HOST_PORT left at 3200 the two agree and this changes nothing;
+      # set it differently and without this line every WebSocket upgrade would be
+      # rejected 403 and the terminal would never connect.
+      ALLOWED_ORIGINS: "http://127.0.0.1:${HOST_PORT:-3201},http://localhost:${HOST_PORT:-3201}"
+
+      # Trust the list above and nothing else. Without this the container would
+      # also accept origins derived from its own PORT (3200), which is not a
+      # port anything is published on when HOST_PORT differs.
+      ALLOWED_ORIGINS_ONLY: "1"
+
+      # Scanned in precedence order, earlier root wins a name collision. These are
+      # host paths on purpose; see the volumes below.
+      REPO_ROOTS: "${REPO_ROOTS:-/Users/michael/repo/claude:/Users/michael/repo}"
+
+      TZ: "${TZ:-UTC}"
+
+    volumes:
+      # Mounted at the SAME path it has on the Mac, not at /repos.
+      #
+      # config/extra-projects.json stores absolute host paths and
+      # DEFAULT_REPO_ROOTS in lib/projects.js is absolute, so an identical path
+      # means no translation layer, the extras file keeps working untouched, and
+      # the directory the UI prints matches what the Mac calls it. Anything else
+      # would need every one of those paths rewritten for the container.
+      - "${REPO_MOUNT:-/Users/michael/repo}:${REPO_MOUNT:-/Users/michael/repo}"
+
+      # The three config files, mounted over the copies baked into the image.
+      # The manage-projects screen writes ignored-projects.json and the UI writes
+      # top-targets.json; without this mount both edits would live only inside the
+      # running container and be lost on the next rebuild.
+      - "./config:/app/config"
+
+    # Published on loopback only. This is what replaces the app's own 127.0.0.1
+    # bind, which had to be given up so the published port could reach it.
+    #
+    # The default is 3201, not 3200, and that is deliberate. 3200 belongs to the
+    # host instance: the Makefile, cmdc.sh, the LaunchAgent and ~/repo/appmenu
+    # all assume it. The host instance is the one that can actually build the
+    # macOS projects, so the container must never take its port by default.
+    # Set HOST_PORT=3200 in .env only if you want the container INSTEAD of the
+    # host instance, and stop the host one first.
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${HOST_PORT:-3201}:3200"
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

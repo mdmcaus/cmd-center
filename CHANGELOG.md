@@ -6,6 +6,85 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Docker support for local use on macOS with OrbStack.** `Dockerfile`,
+  `docker-compose.yml`, `.dockerignore`, `.env.example` and `docker-deploy.md`,
+  following the same pattern as `~/repo/jobhunt`, plus `make docker-build`,
+  `docker-up`, `docker-down`, `docker-restart`, `docker-logs`, `docker-status`,
+  `docker-shell` and `docker-clean`.
+
+  The repo roots are bind-mounted at their real host paths
+  (`/Users/michael/repo` at `/Users/michael/repo`) rather than somewhere like
+  `/repos`, because `config/extra-projects.json` stores absolute host paths and
+  `DEFAULT_REPO_ROOTS` is absolute. The container therefore lists exactly the
+  same projects, with the same paths, as the host instance.
+
+  node-pty 1.1.0 ships no Linux prebuild, so the build stage installs a
+  toolchain and compiles it; the runtime stage copies only the result.
+
+  **The container publishes on 3201, not 3200, so it runs in parallel with the
+  normal instance out of the box.** 3200 belongs to the host instance, which the
+  Makefile, `cmdc.sh`, the LaunchAgent and `~/repo/appmenu` all assume, and which
+  is the only one that can build the macOS projects. `make docker-up` also
+  refuses to start when its port is already held by something other than the
+  container itself, rather than failing cryptically or leaving you driving the
+  wrong instance.
+
+  **What does not work in the container:** the shell is Linux, so the 15 of 18
+  discovered projects whose Makefiles call `xcodebuild`, `swift`, `codesign`,
+  `notarytool`, `hdiutil`, `launchctl`, `open` or `magick` fail there by
+  design. Keep using the host instance for those. See `docker-deploy.md`.
+- `ALLOWED_ORIGINS`, an optional comma-separated list of extra origins the
+  WebSocket and mutating routes will accept. Needed because the browser's
+  `Origin` carries the published host port while the container listens on 3200;
+  without it, remapping the port made every terminal fail with a 403 on the
+  upgrade. Entries must be well-formed `http(s)` origins and are matched
+  exactly, so a malformed entry or one carrying a path is dropped rather than
+  trusted. Unset, the allow set is unchanged.
+- `ALLOWED_ORIGINS_ONLY=1` narrows the allow set to `ALLOWED_ORIGINS` alone,
+  dropping the origins derived from the process's own listening port. Compose
+  sets it, so the container trusts only the port it is actually published on.
+- `GET /api/health`, a flat `{ ok: true }` route for the container healthcheck.
+  Pointing the healthcheck at `/api/projects` instead would have rescanned every
+  repo root every 30 seconds.
+- Security tests for all of the above: the extra origin is accepted, malformed
+  and path-bearing entries are dropped, strict mode drops the derived origins,
+  the health route answers, and `shellEnv()` yields a usable identity.
+
+### Removed
+- `riptide` dropped from `config/ignored-projects.json`. It was a third-party
+  checkout whose source is no longer in `~/repo`, so the entry ignored nothing.
+  The installed binary at `~/go/bin/riptide` is untouched.
+
+### Changed
+- `make start`, `stop`, `restart`, `status` and `logs` are now Docker-aware.
+  They ask whether the cmd-center container is running before touching the node
+  instance, so `status` reports the container honestly instead of mistaking
+  OrbStack's port-forwarding helper for a server, `logs` follows the container
+  log, and `start` declines to bring up a second server behind the same port.
+
+### Fixed
+- `make stop` no longer kills whatever process happens to hold `PORT`. It now
+  stops the container when that is what is running, and otherwise kills the
+  holder only if it is a node process. Previously, with the container published
+  on 3200, `make stop` would have killed **OrbStack's port-forwarding helper**,
+  which is not a cmd-center process at all.
+
+### Security
+- `npm audit fix` resolved a moderate advisory in `qs` (a transitive dependency
+  of Express). Lockfile only, no direct dependency changed. `npm audit
+  --omit=dev` now reports 0 vulnerabilities.
+
+### Fixed
+- `shellEnv()` no longer crashes when the effective uid has no passwd entry.
+  `os.userInfo()` throws `ERR_SYSTEM_ERROR` in that case, which is exactly what
+  a container told to run as an arbitrary uid produces, and it would have taken
+  down every terminal the user tried to open. It now falls back to the
+  environment.
+- `shellEnv()` also strips `ALLOWED_ORIGINS` and `ALLOWED_ORIGINS_ONLY` from the
+  environment handed to project shells, alongside the `PORT` and `HOST` it
+  already stripped.
+
 ### Changed
 - The project now lives at `~/repo/cmd-center` as a standalone repository, extracted from
   the `claude` monorepo with `git subtree split` so its history is intact. This puts it

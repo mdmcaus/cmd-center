@@ -4,6 +4,9 @@
 //   - the PTY WebSocket rejects an unknown / traversal project (404)
 //   - a valid project opens a working PTY (echo round-trips)
 //   - the server binds to 127.0.0.1 (loopback only)
+//   - ALLOWED_ORIGINS widens the allowlist only to well-formed origins, and
+//     leaves every other origin rejected (this is what Docker relies on)
+//   - shellEnv() never leaks this server's own listener config into a project
 // Run: node test/security.js
 
 const fs = require('fs');
@@ -37,7 +40,14 @@ const ignoreCfg = path.join(root, 'ignored-projects.json');
 fs.writeFileSync(ignoreCfg, '[]');
 process.env.IGNORED_PROJECTS_FILE = ignoreCfg;
 
-const { server } = require('../server');
+// One well-formed extra origin, which must be accepted, plus two entries that
+// must be dropped rather than trusted: a string that is not a URL at all, and a
+// URL carrying a path (whose origin is not equal to the string, so honouring it
+// would mean matching more than was written).
+const EXTRA_ORIGIN = `http://127.0.0.1:${PORT + 1}`;
+process.env.ALLOWED_ORIGINS = [EXTRA_ORIGIN, 'not-a-url', 'http://junk.example.com/path'].join(',');
+
+const { server, shellEnv } = require('../server');
 
 let passed = 0;
 const results = [];
@@ -120,6 +130,128 @@ function outcome(ws) {
 }
 
 async function run() {
+  // --- Docker-related checks, appended ---
+  // ALLOWED_ORIGINS: the well-formed extra origin is accepted.
+  {
+    const ws = connect('demo', EXTRA_ORIGIN);
+    const r = await outcome(ws);
+    ws.terminate();
+    record('ALLOWED_ORIGINS extra origin accepted', r.opened === true, JSON.stringify(r));
+  }
+
+  // ALLOWED_ORIGINS: a malformed entry is dropped, not trusted.
+  {
+    const ws = connect('demo', 'not-a-url');
+    const r = await outcome(ws);
+    ws.terminate();
+    record(
+      'ALLOWED_ORIGINS malformed entry dropped',
+      r.opened === false && r.status === 403,
+      JSON.stringify(r)
+    );
+  }
+
+  // ALLOWED_ORIGINS: an entry with a path does not grant its bare origin.
+  {
+    const ws = connect('demo', 'http://junk.example.com');
+    const r = await outcome(ws);
+    ws.terminate();
+    record(
+      'ALLOWED_ORIGINS path-bearing entry dropped',
+      r.opened === false && r.status === 403,
+      JSON.stringify(r)
+    );
+  }
+
+  // Health route answers without touching the filesystem (the container
+  // healthcheck polls it every 30s).
+  {
+    const body = await new Promise((resolve) => {
+      http
+        .get({ host: HOST, port: PORT, path: '/api/health' }, (res) => {
+          let buf = '';
+          res.on('data', (d) => (buf += d));
+          res.on('end', () => resolve({ status: res.statusCode, buf }));
+        })
+        .on('error', (e) => resolve({ status: 0, buf: String(e) }));
+    });
+    let ok = false;
+    try {
+      ok = body.status === 200 && JSON.parse(body.buf).ok === true;
+    } catch (e) {
+      ok = false;
+    }
+    record('health route responds 200 {ok:true}', ok, JSON.stringify(body));
+  }
+
+  // The server's own listener config must never reach a project shell: a
+  // Makefile saying `PORT ?= 3000` would otherwise bind this server's port.
+  {
+    const env = shellEnv();
+    const clean =
+      env.PORT === undefined && env.HOST === undefined && env.ALLOWED_ORIGINS === undefined;
+    record(
+      'shellEnv strips PORT / HOST / ALLOWED_ORIGINS',
+      clean,
+      JSON.stringify({ PORT: env.PORT, HOST: env.HOST, ALLOWED_ORIGINS: env.ALLOWED_ORIGINS })
+    );
+  }
+
+  // ALLOWED_ORIGINS_ONLY drops the port-derived origins. Checked in a child
+  // process because the allow set is built once at module load, and this suite
+  // needs the default (non-strict) server for every other case.
+  {
+    const { execFileSync } = require('child_process');
+    const probe = `
+      process.env.PORT = '${PORT}';
+      process.env.HOST = '${HOST}';
+      process.env.REPO_ROOT = ${JSON.stringify(root)};
+      process.env.EXTRA_PROJECTS_FILE = ${JSON.stringify(extraCfg)};
+      process.env.IGNORED_PROJECTS_FILE = ${JSON.stringify(ignoreCfg)};
+      process.env.TOP_TARGETS_FILE = ${JSON.stringify(topCfg)};
+      process.env.ALLOWED_ORIGINS = ${JSON.stringify(EXTRA_ORIGIN)};
+      process.env.ALLOWED_ORIGINS_ONLY = '1';
+      const { allowedOrigin } = require(${JSON.stringify(path.join(__dirname, '..', 'server.js'))});
+      console.log(JSON.stringify({
+        extra: allowedOrigin(${JSON.stringify(EXTRA_ORIGIN)}),
+        derived: allowedOrigin('http://${HOST}:${PORT}'),
+        foreign: allowedOrigin('http://evil.example.com'),
+      }));
+      process.exit(0);
+    `;
+    let verdict = {};
+    try {
+      verdict = JSON.parse(execFileSync(process.execPath, ['-e', probe], { encoding: 'utf8' }).trim());
+    } catch (e) {
+      verdict = { error: String(e && e.message) };
+    }
+    record(
+      'ALLOWED_ORIGINS_ONLY drops port-derived origins',
+      verdict.extra === true && verdict.derived === false && verdict.foreign === false,
+      JSON.stringify(verdict)
+    );
+  }
+
+  // shellEnv must always produce a usable identity, even where os.userInfo()
+  // would throw (a container uid with no passwd entry).
+  {
+    const env = shellEnv();
+    const ok =
+      typeof env.USER === 'string' &&
+      env.USER.length > 0 &&
+      typeof env.HOME === 'string' &&
+      env.HOME.length > 0 &&
+      typeof env.SHELL === 'string' &&
+      env.SHELL.length > 0;
+    record(
+      'shellEnv yields USER / HOME / SHELL',
+      ok,
+      JSON.stringify({ USER: env.USER, HOME: env.HOME, SHELL: env.SHELL })
+    );
+  }
+
+  // --- original checks ---
+
   const goodOrigin = `http://${HOST}:${PORT}`;
 
   // 1. Foreign Origin is rejected with 403.

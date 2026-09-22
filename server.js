@@ -7,6 +7,11 @@
 //   - WebSocket connections must carry a same-origin Origin header
 //   - the PTY cwd is only ever a directory from the scanned Makefile allowlist;
 //     the client-supplied project name is validated, never used to build a path
+//
+// In Docker the first rule is enforced on the host side instead: the process
+// binds 0.0.0.0 inside the container (a loopback listener there is unreachable
+// through a published port) and compose publishes it to 127.0.0.1 only. See
+// docker-deploy.md.
 
 const express = require('express');
 const helmet = require('helmet');
@@ -28,17 +33,59 @@ const {
 const PORT = Number(process.env.PORT) || 3200;
 const HOST = process.env.HOST || '127.0.0.1';
 
+// Extra origins the page may legitimately be served from, as a comma-separated
+// list. Needed when the port the browser sees is not the port this process
+// listens on, which is exactly what happens in Docker: the container listens on
+// 3200 while compose may publish it on another host port, so the browser sends
+// an Origin this server would otherwise reject and every terminal would 403.
+//
+// Empty by default, so with the variable unset the allow set is identical to
+// what it has always been. Entries are trimmed and matched exactly; anything
+// that is not a well-formed http(s) origin is dropped rather than trusted.
+const EXTRA_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean)
+  .filter((entry) => {
+    try {
+      const u = new URL(entry);
+      return (u.protocol === 'http:' || u.protocol === 'https:') && u.origin === entry;
+    } catch {
+      return false;
+    }
+  });
+
+// The WebSocket origin matching each permitted http origin. A browser sends the
+// page's http origin on the upgrade request, so these are only used to build the
+// CSP connect-src list, not to widen the check itself.
+function wsOrigin(httpOrigin) {
+  return httpOrigin.replace(/^http/, 'ws');
+}
+
 // Accept a request only from this app's own page. Used for the WebSocket upgrade
 // and for mutating API routes, so a malicious page the user visits cannot drive
 // the terminal or rewrite config through the user's browser.
+// The origins derived from this process's own listener. In Docker these are not
+// the origins the browser actually uses: the container listens on 3200 while the
+// page may be published on another port, so the derived set would accept an
+// origin for a port nothing is served on. Harmless (a page cannot forge its own
+// Origin) but wider than it needs to be, so ALLOWED_ORIGINS_ONLY drops them and
+// trusts nothing but the explicit list. Off by default; compose turns it on.
+const DERIVED_ORIGINS = [
+  `http://${HOST}:${PORT}`,
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+];
+
+const ORIGINS_ONLY = process.env.ALLOWED_ORIGINS_ONLY === '1' && EXTRA_ORIGINS.length > 0;
+
+const ALLOWED_ORIGINS = new Set(
+  ORIGINS_ONLY ? EXTRA_ORIGINS : [...DERIVED_ORIGINS, ...EXTRA_ORIGINS]
+);
+
 function allowedOrigin(origin) {
   if (!origin) return false;
-  const allowed = new Set([
-    `http://${HOST}:${PORT}`,
-    `http://localhost:${PORT}`,
-    `http://127.0.0.1:${PORT}`,
-  ]);
-  return allowed.has(origin);
+  return ALLOWED_ORIGINS.has(origin);
 }
 
 const app = express();
@@ -62,14 +109,7 @@ app.use(
         'default-src': ["'self'"],
         'script-src': ["'self'"],
         'style-src': ["'self'", "'unsafe-inline'"],
-        'connect-src': [
-          ...new Set([
-            "'self'",
-            `ws://${HOST}:${PORT}`,
-            `ws://localhost:${PORT}`,
-            `ws://127.0.0.1:${PORT}`,
-          ]),
-        ],
+        'connect-src': [...new Set(["'self'", ...[...ALLOWED_ORIGINS].map(wsOrigin)])],
         'img-src': ["'self'", 'data:'],
         'upgrade-insecure-requests': null,
       },
@@ -79,6 +119,13 @@ app.use(
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// GET /api/health -> { ok: true }
+// Deliberately does no work. The container healthcheck polls this every 30s, and
+// pointing it at /api/projects instead would rescan every repo root on each poll.
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true });
+});
 
 // GET /api/projects -> [{ name, path, targets:[{name,desc}], topTargets:[...] }]
 // Ignored projects are already filtered out; this is the list the sidebar shows.
@@ -167,8 +214,25 @@ server.on('upgrade', (req, socket, head) => {
 // process actually runs as a normal user). The shell prompt and tools read those
 // variables, so we rebuild them from the real account behind the current uid so
 // the terminal matches the user's normal login shell.
+// os.userInfo() throws ERR_SYSTEM_ERROR (uv_os_get_passwd ENOENT) when the
+// effective uid has no passwd entry. That is not hypothetical: a container told
+// to run as the host's uid has no matching account inside the image, and an
+// unguarded call here would take down every terminal the user tries to open.
+// Fall back to the environment, which is the best identity available.
+function currentUser() {
+  try {
+    return os.userInfo(); // reflects the real effective uid
+  } catch {
+    return {
+      username: process.env.USER || process.env.LOGNAME || 'user',
+      homedir: process.env.HOME || '/',
+      shell: process.env.SHELL || null,
+    };
+  }
+}
+
 function shellEnv() {
-  const info = os.userInfo(); // reflects the real effective uid
+  const info = currentUser();
   const env = {
     ...process.env,
     USER: info.username,
@@ -182,6 +246,8 @@ function shellEnv() {
   // Makefile says `PORT ?= 3000` would silently bind our 3200 instead.
   delete env.PORT;
   delete env.HOST;
+  delete env.ALLOWED_ORIGINS;
+  delete env.ALLOWED_ORIGINS_ONLY;
   return env;
 }
 
@@ -240,4 +306,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, server, allowedOrigin };
+module.exports = { app, server, allowedOrigin, shellEnv, currentUser };

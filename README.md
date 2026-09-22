@@ -173,6 +173,32 @@ Set via environment variables (or `make VAR=value ...`):
 - `IGNORED_PROJECTS_FILE` (default `config/ignored-projects.json`): JSON array of project
   names to leave out of the list entirely.
 
+## Running in Docker (macOS, OrbStack)
+
+There is a container build that follows the same pattern as `~/repo/jobhunt`.
+
+```bash
+make docker-build   # first build is slow: node-pty compiles for linux
+make docker-up      # start, published on 127.0.0.1:3201
+make docker-status  # state, health, URL
+make docker-down    # stop
+```
+
+**It runs in parallel with the normal instance out of the box.** The container
+defaults to port **3201** so it can never take 3200 from the host instance,
+which is the only one that can build the macOS projects. `make docker-up`
+refuses to start if its port is already taken.
+
+**Read this before using it.** The container's shell is Linux, so `make` runs
+against the container's toolchain. Of the 18 projects cmd-center discovers, 15
+have Makefiles that call `xcodebuild`, `swift`, `codesign`, `notarytool`,
+`hdiutil`, `launchctl`, `open` or `magick`, and those targets cannot work in a
+container. Use the container for the portable projects and keep the host
+instance for macOS app builds.
+
+Full detail, design notes, and the verification checklist are in
+[docker-deploy.md](docker-deploy.md).
+
 ## How it works
 
 - `lib/projects.js` scans each of `REPO_ROOTS` one level deep, keeps directories that
@@ -188,10 +214,16 @@ Set via environment variables (or `make VAR=value ...`):
 
 ## Security notes
 
-- The HTTP server and WebSocket bind to `127.0.0.1` only.
+- The HTTP server and WebSocket bind to `127.0.0.1` only. In the container that
+  moves to the host side: the process binds `0.0.0.0` inside (a loopback listener
+  there is unreachable through a published port) and compose publishes to
+  `127.0.0.1` only. Do not point `BIND_ADDR` at a LAN address.
 - The WebSocket upgrade is accepted only when the `Origin` header matches the app's own
   origin, so a random web page you visit cannot open a shell on your machine through
-  your browser.
+  your browser. `ALLOWED_ORIGINS` can add further origins, which is what lets the
+  container be published on a port other than the one it listens on; entries must be
+  well-formed `http(s)` origins and are matched exactly, and `ALLOWED_ORIGINS_ONLY=1`
+  narrows the set to that list alone.
 - The `project` query parameter is validated against the freshly-scanned Makefile
   allowlist. The terminal's working directory is never built from raw client input, so
   path traversal cannot point it at an arbitrary directory.
