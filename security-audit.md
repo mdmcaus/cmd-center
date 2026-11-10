@@ -57,7 +57,7 @@ same in every project, and this project's settings are in `security-audit.conf`.
 | 1 | Security tests (`SECURITY_TESTS` in the conf) | The tests fail | |
 | 2 | Gitleaks: git history and working tree | A secret is found | |
 | 3 | Semgrep project rules (`semgrep/`) | An ERROR rule matches | A WARNING rule matches |
-| 3 | Semgrep platform scan (`semgrep ci`) | A finding of ERROR, HIGH or CRITICAL severity | An advisory finding (WARNING, MEDIUM, LOW, INFO); offline; a file could not be parsed |
+| 3 | Semgrep platform scan (`semgrep ci`) | A finding of ERROR, HIGH or CRITICAL severity | An advisory finding (WARNING, MEDIUM, LOW, INFO); a dependency finding in a dev-only npm package; offline; a file could not be parsed |
 | 4 | Dependencies: `npm audit` (Node) or osv-scanner (Swift packages) | A high or critical vulnerability | Moderate or low, or not scanned |
 | 5 | GitHub Actions pinned to commit SHAs | Any `uses:` with a tag such as `@v4` | |
 | 6 | Entitlements (macOS) | A key that switches off the hardened runtime | Sandbox off with no reason recorded; a temporary exception |

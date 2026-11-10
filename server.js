@@ -52,8 +52,8 @@ const app = express();
 //     http://127.0.0.1 Safari honours it and tries to fetch styles.css / app.js /
 //     the xterm assets over https, which fails (there is no TLS), leaving the page
 //     unstyled with no scripts. Chrome exempts localhost; Safari does not.
-//   - connect-src lists the ws:// origins explicitly so Safari allows the terminal
-//     WebSocket ('self' alone is not reliably honoured for ws in Safari).
+//   - connect-src lists the plain WebSocket origins explicitly so Safari allows
+//     the terminal WebSocket ('self' alone is not reliably honoured for ws in Safari).
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -65,6 +65,9 @@ app.use(
         'connect-src': [
           ...new Set([
             "'self'",
+            // Cleartext ws is fine here: the server binds to 127.0.0.1, so the
+            // socket never leaves this Mac, and there is no TLS to upgrade to.
+            // nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
             `ws://${HOST}:${PORT}`,
             `ws://localhost:${PORT}`,
             `ws://127.0.0.1:${PORT}`,

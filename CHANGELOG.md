@@ -22,6 +22,8 @@ All notable changes to this project are documented here. The format is based on
   was holding the port and `make stop` would have signalled it.
 
 ### Security
+- The Content-Security-Policy's cleartext WebSocket origin carries a reviewed `nosemgrep` marker: the server binds to 127.0.0.1, so the socket never leaves the Mac. A dev-only Playwright advisory (bundled Brotli, no fixed version yet) is recorded as advisory by the audit.
+- Updated three dependencies of Express to fix known vulnerabilities: proxy-addr 2.0.7 to 2.0.8 (critical, IP spoofing via IPv4-mapped IPv6 trust subnets), body-parser 2.3.0 to 2.4.0 (high, denial of service via trailing bytes after a compressed body) and qs 6.16.0 to 6.17.1 (moderate). Only package-lock.json changed.
 - GitHub Actions in the workflows are pinned to full commit SHAs instead of tags such as `@v4`. A tag can be moved to different code by whoever controls the Action, and the release workflow can publish releases. Bump the SHA and its `# vN` comment together (`gh api repos/OWNER/ACTION/commits/vN --jq .sha`).
 - `npm audit fix` resolved a moderate advisory in `qs` (a transitive dependency
   of Express). Lockfile only, no direct dependency changed. `npm audit

@@ -132,13 +132,30 @@ except Exception:
     semgrep ci --json-output="$ci_json" >>"$LOG" 2>&1
     ci_status=$?
     # ERROR, HIGH and CRITICAL fail the audit. WARNING, MEDIUM, LOW and INFO
-    # are advice ("consider certificate pinning") and show as WARN.
+    # are advice ("consider certificate pinning") and show as WARN. A supply
+    # chain finding in a dev-only npm package (test browsers, linters) is also
+    # advice, matching npm audit --omit=dev in step 4: it never ships.
     counts=$(python3 -I -c 'import json,sys
+def dev_only(x):
+    dm = x["extra"].get("sca_info", {}).get("dependency_match", {})
+    pkg = dm.get("found_dependency", {}).get("package")
+    lock = dm.get("lockfile", "")
+    if not pkg or not lock.endswith("package-lock.json"):
+        return False
+    try:
+        entry = json.load(open(lock)).get("packages", {}).get("node_modules/" + pkg, {})
+    except Exception:
+        return False
+    return entry.get("dev") is True
 try:
     d=json.load(open(sys.argv[1])); r=d.get("results",[])
-    hard=sum(1 for x in r if x["extra"].get("severity","").upper() in ("ERROR","HIGH","CRITICAL"))
+    hard=0
+    for x in r:
+        sev=x["extra"].get("severity","").upper()
+        dev=dev_only(x)
+        if sev in ("ERROR","HIGH","CRITICAL") and not dev: hard+=1
+        print("  %s%s %s:%s %s" % (sev, " (dev-only)" if dev else "", x["path"], x["start"]["line"], x["check_id"]), file=sys.stderr)
     print(hard, len(r)-hard, len(d.get("errors",[])))
-    for x in r: print("  %s %s:%s %s" % (x["extra"].get("severity",""), x["path"], x["start"]["line"], x["check_id"]), file=sys.stderr)
 except Exception:
     print("? ? ?")' "$ci_json" 2>>"$LOG")
     rm -f "$ci_json"
