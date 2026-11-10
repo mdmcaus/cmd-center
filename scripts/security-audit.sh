@@ -16,12 +16,13 @@ FULL=0
 [ "${1:-}" = "--full" ] && FULL=1
 
 # Defaults, overridden by security-audit.conf ---------------------------------
-PROJECT_TYPE=other            # swiftpm | xcode | node | other
+PROJECT_TYPE=other            # swiftpm | xcode | ios | node | go | other
 APP_NAME=$(basename "$PWD")
 APP_BUNDLE=""                 # e.g. dist/App.app
 DMG=""                        # e.g. dist/App.dmg
 ENTITLEMENTS=""               # e.g. App.entitlements
 SECURITY_TESTS=""             # command that runs the security tests, e.g. "make test-security"
+DEPS_CMD=""                   # project's own dependency check, e.g. "make vuln"; overrides step 4's default
 SANDBOX_OFF_REASON=""         # set when the App Sandbox is off on purpose, with where it is explained
 ATS_REASON=""                 # set when NSAllowsArbitraryLoads is true on purpose
 SANITIZE_CMDS=()              # commands run with FULL=1
@@ -59,6 +60,10 @@ has_key() {  # has_key <plist-file> <key>
   /usr/libexec/PlistBuddy -c "Print :$2" "$1" >/dev/null 2>&1
 }
 
+key_true() {  # key_true <plist-file> <key>: present AND true. A key set to false grants nothing.
+  [ "$(/usr/libexec/PlistBuddy -c "Print :$2" "$1" 2>/dev/null)" = "true" ]
+}
+
 is_macos_app() { [ "$PROJECT_TYPE" = swiftpm ] || [ "$PROJECT_TYPE" = xcode ]; }
 
 : > "$LOG"
@@ -87,10 +92,30 @@ if command -v gitleaks >/dev/null; then
       record FAIL "secrets in git history" "gitleaks git --redact -v ."
     fi
   fi
-  if gitleaks dir --no-banner --redact ${cfg[@]+"${cfg[@]}"} . >>"$LOG" 2>&1; then
-    record PASS "no secrets in working tree" ""
+  # Working tree: files git ignores (.env, a local SSH host key) are where local
+  # secrets belong, so findings in them are not counted. Everything else is.
+  dir_json=$(mktemp)
+  gitleaks dir --no-banner --redact ${cfg[@]+"${cfg[@]}"} --report-format json --report-path "$dir_json" . >>"$LOG" 2>&1
+  dir_status=$?
+  tracked_hits=$(python3 -I -c 'import json,subprocess,sys
+try:
+    d=json.load(open(sys.argv[1]))
+except Exception:
+    d=[]
+n=0
+for x in d:
+    f=x.get("File","")
+    ignored=subprocess.run(["git","check-ignore","-q",f],capture_output=True).returncode==0
+    print("  %s %s:%s%s" % (x.get("RuleID",""), f, x.get("StartLine",""), " (gitignored, not counted)" if ignored else ""), file=sys.stderr)
+    if not ignored: n+=1
+print(n)' "$dir_json" 2>>"$LOG")
+  rm -f "$dir_json"
+  if [ "$dir_status" -gt 1 ]; then
+    record WARN "working tree secret scan" "gitleaks failed (exit $dir_status); see $LOG"
+  elif [ "${tracked_hits:-0}" = "0" ]; then
+    record PASS "no secrets in working tree" "gitignored files not counted"
   else
-    record FAIL "secrets in working tree" "gitleaks dir --redact -v ."
+    record FAIL "secrets in working tree" "$tracked_hits in files git would commit: gitleaks dir --redact -v ."
   fi
 else
   record SKIP "gitleaks" "brew install gitleaks"
@@ -133,8 +158,10 @@ except Exception:
     ci_status=$?
     # ERROR, HIGH and CRITICAL fail the audit. WARNING, MEDIUM, LOW and INFO
     # are advice ("consider certificate pinning") and show as WARN. A supply
-    # chain finding in a dev-only npm package (test browsers, linters) is also
-    # advice, matching npm audit --omit=dev in step 4: it never ships.
+    # chain finding is also advice when Semgrep's reachability analysis shows
+    # the code never calls the vulnerable function, or when the package is a
+    # dev-only npm package (test browsers, linters) that never ships, matching
+    # npm audit --omit=dev in step 4.
     counts=$(python3 -I -c 'import json,sys
 def dev_only(x):
     dm = x["extra"].get("sca_info", {}).get("dependency_match", {})
@@ -153,8 +180,10 @@ try:
     for x in r:
         sev=x["extra"].get("severity","").upper()
         dev=dev_only(x)
-        if sev in ("ERROR","HIGH","CRITICAL") and not dev: hard+=1
-        print("  %s%s %s:%s %s" % (sev, " (dev-only)" if dev else "", x["path"], x["start"]["line"], x["check_id"]), file=sys.stderr)
+        unreachable=x["extra"].get("sca_info",{}).get("reachable") is False
+        note=" (dev-only)" if dev else (" (not reachable)" if unreachable else "")
+        if sev in ("ERROR","HIGH","CRITICAL") and not note: hard+=1
+        print("  %s%s %s:%s %s" % (sev, note, x["path"], x["start"]["line"], x["check_id"]), file=sys.stderr)
     print(hard, len(r)-hard, len(d.get("errors",[])))
 except Exception:
     print("? ? ?")' "$ci_json" 2>>"$LOG")
@@ -180,7 +209,13 @@ fi
 
 # 4. Dependencies ------------------------------------------------------------------------
 section "4. Third-party dependencies"
-if [ "$PROJECT_TYPE" = node ] && [ -f package.json ]; then
+if [ -n "$DEPS_CMD" ]; then
+  if bash -c "$DEPS_CMD" >>"$LOG" 2>&1; then
+    record PASS "dependency check" "$DEPS_CMD"
+  else
+    record FAIL "dependency check" "$DEPS_CMD reported problems or could not run; see $LOG"
+  fi
+elif [ "$PROJECT_TYPE" = node ] && [ -f package.json ]; then
   if [ -f package-lock.json ]; then
     audit_json=$(mktemp)
     npm audit --omit=dev --json >"$audit_json" 2>>"$LOG"
@@ -249,7 +284,7 @@ if is_macos_app; then
   section "6. Entitlements ($ENTITLEMENTS)"
   if [ -n "$ENTITLEMENTS" ] && [ -f "$ENTITLEMENTS" ]; then
     bad=""
-    for key in "${FORBIDDEN_KEYS[@]}"; do has_key "$ENTITLEMENTS" "$key" && bad="$bad ${key#com.apple.security.}"; done
+    for key in "${FORBIDDEN_KEYS[@]}"; do key_true "$ENTITLEMENTS" "$key" && bad="$bad ${key#com.apple.security.}"; done
     if [ -z "$bad" ]; then
       record PASS "no hardened-runtime exceptions" ""
     else
@@ -285,7 +320,7 @@ if is_macos_app; then
     codesign -d --entitlements :- "$APP_BUNDLE" >"$embedded" 2>/dev/null
     bad=""
     if [ -s "$embedded" ]; then
-      for key in "${FORBIDDEN_KEYS[@]}"; do has_key "$embedded" "$key" && bad="$bad ${key#com.apple.security.}"; done
+      for key in "${FORBIDDEN_KEYS[@]}"; do key_true "$embedded" "$key" && bad="$bad ${key#com.apple.security.}"; done
     fi
     rm -f "$embedded"
     if [ -z "$bad" ]; then

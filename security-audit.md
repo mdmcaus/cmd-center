@@ -55,10 +55,10 @@ same in every project, and this project's settings are in `security-audit.conf`.
 | Step | Check | FAIL when | WARN when |
 |---|---|---|---|
 | 1 | Security tests (`SECURITY_TESTS` in the conf) | The tests fail | |
-| 2 | Gitleaks: git history and working tree | A secret is found | |
+| 2 | Gitleaks: git history and working tree | A secret in history, or in a working-tree file git would commit | |
 | 3 | Semgrep project rules (`semgrep/`) | An ERROR rule matches | A WARNING rule matches |
-| 3 | Semgrep platform scan (`semgrep ci`) | A finding of ERROR, HIGH or CRITICAL severity | An advisory finding (WARNING, MEDIUM, LOW, INFO); a dependency finding in a dev-only npm package; offline; a file could not be parsed |
-| 4 | Dependencies: `npm audit` (Node) or osv-scanner (Swift packages) | A high or critical vulnerability | Moderate or low, or not scanned |
+| 3 | Semgrep platform scan (`semgrep ci`) | A finding of ERROR, HIGH or CRITICAL severity | An advisory finding (WARNING, MEDIUM, LOW, INFO); a dependency finding Semgrep shows is not reachable from the code, or in a dev-only npm package; offline; a file could not be parsed |
+| 4 | Dependencies: `DEPS_CMD` if set, else `npm audit` (Node) or osv-scanner (Swift packages) | A high or critical vulnerability | Moderate or low, or not scanned |
 | 5 | GitHub Actions pinned to commit SHAs | Any `uses:` with a tag such as `@v4` | |
 | 6 | Entitlements (macOS) | A key that switches off the hardened runtime | Sandbox off with no reason recorded; a temporary exception |
 | 7 | Built app (macOS) | Bad signature; forbidden key in the signed entitlements; Developer ID build without the hardened runtime | ATS allows cleartext with no reason recorded; ad-hoc signature |
@@ -72,7 +72,7 @@ written for how this app could be attacked, then set `SECURITY_TESTS` in
 
 ### Why each check exists
 
-- **Secrets:** a key committed once stays in git history after it is deleted.
+- **Secrets:** a key committed once stays in git history after it is deleted. Files git ignores (`.env`, a local SSH key) are where local secrets belong, so the working-tree scan does not count them. A reviewed false alarm goes in `.gitleaksignore` by fingerprint.
 - **Semgrep platform:** about 1,900 rules with data-flow tracking, free for up to
   10 contributors. The scan runs on this Mac; findings go to your Semgrep
   dashboard, which is why it is skipped, not failed, when you are logged out.
@@ -91,11 +91,12 @@ written for how this app could be attacked, then set `SECURITY_TESTS` in
 
 | Setting | Meaning |
 |---|---|
-| `PROJECT_TYPE` | `swiftpm`, `xcode`, `node` or `other`; decides which steps run |
+| `PROJECT_TYPE` | `swiftpm`, `xcode` (macOS), `ios`, `node`, `go` or `other`; decides which steps run. `ios` skips the macOS entitlement, bundle and DMG steps: iOS apps are always sandboxed |
 | `APP_NAME` | Shown in the log header |
 | `APP_BUNDLE`, `DMG` | Where `make bundle` and `make dmg` put the app |
 | `ENTITLEMENTS` | The entitlements file used for signing |
 | `SECURITY_TESTS` | Command that runs the security tests; empty means SKIP |
+| `DEPS_CMD` | The project's own dependency check (for example `make vuln` for Go); empty uses the kit's default for the type |
 | `SANDBOX_OFF_REASON` | Why the App Sandbox is off, and where that is explained |
 | `ATS_REASON` | Why `NSAllowsArbitraryLoads` is true |
 | `SANITIZE_CMDS` | Commands run with `FULL=1` |
