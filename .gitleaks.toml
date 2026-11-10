@@ -1,0 +1,23 @@
+# Gitleaks configuration from ~/repo/claude/templates/security-kit.
+# Used by scripts/security-audit.sh. Explained in security-audit.md.
+
+[extend]
+useDefault = true
+
+# Build output, installed dependencies and vendored libraries are not this
+# project's source, and minified third-party code is full of strings that look
+# like keys. Only these paths are ignored.
+[[allowlists]]
+description = "Build output, dependencies and vendored libraries"
+paths = [
+  '''(^|/)(node_modules|vendor|\.build|build|dist|DerivedData|test-results|playwright-report)/''',
+  '''\.min\.(js|css)$''',
+]
+
+# To allow a test fixture (for example a fake JWT), add a block like this,
+# limited to the rule and the file:
+#
+# [[allowlists]]
+# description = "Fake JWT fixtures in the decoder tests"
+# targetRules = ["jwt"]
+# paths = ['''^Tests/AppTests/JWTDecoderTests\.swift$''']

@@ -181,3 +181,10 @@ clean:
 help:
 	@echo "cmd-center make targets:"
 	@grep -E '^##' -A1 Makefile | grep -E '^[a-zA-Z0-9_-]+:' | sed 's/:.*//' | sort -u | sed 's/^/  make /'
+
+## Security audit: security tests, secrets, Semgrep, dependencies, Actions
+## pinning, entitlements, built app, DMG. FULL=1 adds sanitizers.
+## See security-audit.md.
+.PHONY: security-audit
+security-audit:
+	@scripts/security-audit.sh $(if $(FULL),--full)

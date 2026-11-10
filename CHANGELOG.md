@@ -22,6 +22,7 @@ All notable changes to this project are documented here. The format is based on
   was holding the port and `make stop` would have signalled it.
 
 ### Security
+- GitHub Actions in the workflows are pinned to full commit SHAs instead of tags such as `@v4`. A tag can be moved to different code by whoever controls the Action, and the release workflow can publish releases. Bump the SHA and its `# vN` comment together (`gh api repos/OWNER/ACTION/commits/vN --jq .sha`).
 - `npm audit fix` resolved a moderate advisory in `qs` (a transitive dependency
   of Express). Lockfile only, no direct dependency changed. `npm audit
   --omit=dev` now reports 0 vulnerabilities.
@@ -48,6 +49,7 @@ All notable changes to this project are documented here. The format is based on
   being misread by the existing `Array.isArray` guard. Both are now inert data.
 
 ### Added
+- `make security-audit` from the shared security kit: security tests, Gitleaks, Semgrep project rules and platform scan, dependencies, pinned GitHub Actions and, for macOS apps, entitlements, the signed bundle and the DMG. Settings in `security-audit.conf`; explained in `security-audit.md`.
 - **Manage projects** screen, opened from the new `Manage` button in the sidebar header.
   Lists every discovered project in a Shown/Ignored pair of columns with its parent
   directory, so the two roots are easy to tell apart; `✕` ignores one, `+` brings it back.

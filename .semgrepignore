@@ -1,0 +1,31 @@
+# Semgrep ignore list from ~/repo/claude/templates/security-kit.
+# A .semgrepignore replaces Semgrep's built-in list, so that list is repeated
+# here first, then the kit's additions.
+
+# Semgrep's defaults
+node_modules/
+build/
+dist/
+vendor/
+.env/
+.venv/
+.tox/
+*.min.js
+.npm/
+.yarn/
+.semgrep
+.semgrep_logs/
+test/
+tests/
+*_test.go
+
+# Build output Semgrep does not know about
+.build/
+DerivedData/
+
+# Prose: changelogs and plans quote insecure URLs or key names in passing, not as code
+CHANGELOG.md
+PLAN-*.md
+
+# Everything git already ignores
+:include .gitignore

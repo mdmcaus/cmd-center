@@ -1,0 +1,85 @@
+# Base Semgrep rules from ~/repo/claude/templates/security-kit.
+# Run by scripts/security-audit.sh: an ERROR fails the audit, a WARNING is a
+# WARN to review. The Semgrep platform scan (semgrep ci) adds about 1,900 more
+# rules; these cover mistakes it does not, found in real projects here.
+#
+# Add project-specific rules in this folder (any .yml file is loaded). A
+# reviewed exception gets "// nosemgrep: <rule-id>" directly above the line,
+# with the reason on the line above that.
+
+rules:
+  # ---------------------------------------------------------------- Swift
+  - id: kit-swift-no-select
+    languages: [swift]
+    severity: ERROR
+    message: >-
+      select() and fd_set hold at most 1024 descriptors; a socket numbered above
+      that writes past the end of the set. Use poll(). (Found in Aether's port
+      scanner, November 2026.)
+    pattern-either:
+      - pattern: 'select(...)'
+      - pattern: 'fd_set()'
+
+  - id: kit-swift-interpolation-in-shell-quotes
+    languages: [swift]
+    severity: ERROR
+    message: >-
+      A value interpolated inside '...' in a string meant for a shell breaks out
+      of the quotes if it contains '. Quote each value: wrap it in ' and replace
+      every ' inside with '\''. (Found in Aether's "Copy as curl".)
+    # Only strings that look like a command line: they start with a common
+    # command or with an option such as -H. Plain messages that quote a value,
+    # like "entry '\(name)' is missing", are not shell input.
+    pattern-regex: '"(?:-{1,2}[A-Za-z][^"\n]*|(?:curl|wget|ssh|scp|rsync|git|rm|cp|mv|open|osascript|sh|bash|zsh|ffmpeg|docker|kubectl|npm|npx|python3?|swift|xcrun|defaults|launchctl|security|sudo)\s[^"\n]*)''\\\([^"\n]*''[^"\n]*"'
+
+  - id: kit-swift-shell-launch
+    languages: [swift]
+    severity: WARNING
+    message: >-
+      Launching a shell makes ; $(...) and backticks in any argument live.
+      Run the real binary with an argument array instead, or document why a
+      shell is needed.
+    pattern-either:
+      - pattern: 'URL(fileURLWithPath: "/bin/sh")'
+      - pattern: 'URL(fileURLWithPath: "/bin/bash")'
+      - pattern: 'URL(fileURLWithPath: "/bin/zsh")'
+
+  - id: kit-swift-trust-override
+    languages: [swift]
+    severity: WARNING
+    message: >-
+      This accepts a server certificate without checking it, so anyone on the
+      network can impersonate the server. Only acceptable in a tool whose job is
+      to inspect bad certificates, using a session with no cookies or credentials.
+    pattern: '$HANDLER(.useCredential, URLCredential(trust: $T))'
+
+  # ---------------------------------------------------------------- JavaScript
+  - id: kit-js-exec-template
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      exec() runs its string through a shell, so a value built into it with
+      ${...} or + can run commands. Use execFile() or spawn() with an argument
+      array.
+    pattern-either:
+      - pattern: '$CP.exec(`...${$X}...`, ...)'
+      - pattern: '$CP.execSync(`...${$X}...`, ...)'
+      - pattern: 'exec(`...${$X}...`, ...)'
+      - pattern: 'execSync(`...${$X}...`, ...)'
+      - pattern: '$CP.exec("..." + $X, ...)'
+      - pattern: '$CP.execSync("..." + $X, ...)'
+      - pattern: 'exec("..." + $X, ...)'
+      - pattern: 'execSync("..." + $X, ...)'
+
+  - id: kit-js-listen-all-interfaces
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      listen() without a host binds every network interface, so anyone on the
+      same network can reach this server. Pass '127.0.0.1' as the host unless
+      LAN access is intended, and say so in a comment.
+    pattern-either:
+      - pattern: '$S.listen($PORT)'
+      - pattern: '$S.listen($PORT, function (...) {...})'
+      - pattern: '$S.listen($PORT, (...) => {...})'
+      - pattern: '$S.listen($PORT, () => {...})'
